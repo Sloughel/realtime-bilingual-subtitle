@@ -70,6 +70,24 @@ export HTTPS_PROXY=http://127.0.0.1:10810
 
 模型首次使用时自动下载并缓存到 `~/.cache/huggingface`，后续离线可用。
 
+## AI 协作记录
+
+课程要求提交人机协作过程记录。本仓库提供自动提取工具，从 ZCode 会话日志还原：
+
+```bash
+# 生成/更新 docs/AI协作记录.md
+.venv/Scripts/python.exe scripts/export_collab_record.py
+
+# 指定会话（默认取最新的会话日志）
+.venv/Scripts/python.exe scripts/export_collab_record.py --session 812a17c4
+```
+
+输出内容按「轮次」组织，每轮含：用户提示词原文、助手回复、工具调用清单（工具名 + 参数摘要）、
+模型调用异常记录。系统内部提示词、注入消息、推理过程与工具返回原文均已过滤。
+
+> 建议**在项目收尾时重新运行一次**再提交，这样记录会自动包含全部开发过程；
+> 中途生成的版本只覆盖到当时的进度。日志格式与拼接机制见脚本头部注释。
+
 ## 目录结构
 
 ```
