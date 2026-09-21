@@ -88,6 +88,27 @@ export HTTPS_PROXY=http://127.0.0.1:10810
 > 建议**在项目收尾时重新运行一次**再提交，这样记录会自动包含全部开发过程；
 > 中途生成的版本只覆盖到当时的进度。日志格式与拼接机制见脚本头部注释。
 
+### 摘录的可校验性
+
+生成的文件头部记录了**源日志的文件名、大小、行数、SHA256**，以及所用脚本与参数，
+便于评审核验"摘录确实来自该日志"：
+
+```bash
+# 1. 计算原始会话日志的哈希，与记录头部所列比对
+.venv/Scripts/python.exe -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" \
+  ~/.zcode/cli/rollout/model-io-sess_<会话ID>.jsonl
+
+# 2. 以相同参数重新生成，与原文件逐字比对
+.venv/Scripts/python.exe scripts/export_collab_record.py --session <会话ID> --output /tmp/regenerated.md
+diff /tmp/regenerated.md docs/AI协作记录.md   # 时间戳/哈希段会不同，正文应一致
+```
+
+头部统计数字由渲染结果反推，与正文条目严格一致：轮次数、用户提示词数、助手回复段数、
+工具调用次数、异常次数均可逐一数验。
+
+> 若课程要求提交原始日志，可附上 ZCode「导出日志」生成的 zip。注意该 zip 含**本机全部
+> 会话**（不止本项目）与模型配置文件，提交前请确认内容范围。
+
 ## 目录结构
 
 ```

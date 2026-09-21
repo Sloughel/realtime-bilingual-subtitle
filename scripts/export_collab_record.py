@@ -41,6 +41,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -283,31 +284,21 @@ def truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n\n*（此处省略 {len(text) - limit} 字，完整内容见原始日志）*"
 
 
+def file_sha256(path: Path) -> str:
+    """源日志的 SHA256，用于校验本摘录与原文的对应关系。"""
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for blk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(blk)
+    return h.hexdigest()
+
+
 def render(entries: list[dict], stats: dict, conv: dict, src: Path,
            session_id: str, max_chars: int) -> str:
     times = [e["ts"] for e in entries if e.get("ts")]
     span = f"{fmt_ts(min(times))} ~ {fmt_ts(max(times))}" if times else "（无时间信息）"
 
-    out: list[str] = []
-    out.append("# AI 协作记录")
-    out.append("")
-    out.append("> 本记录由 ZCode 会话日志自动提取，用于提交课程作业。")
-    out.append(">")
-    out.append(f"> - 会话 ID：`{session_id}`")
-    out.append(f"> - 时间范围：{span}")
-    out.append(f"> - 数据来源：`{src.name}`")
-    out.append(f"> - 统计：日志记录（模型调用）{conv['records']} 条，"
-               f"其中带对话窗口 {conv['with_messages']} 条；"
-               f"还原会话消息 {stats['user'] + stats['assistant'] + stats['system'] + stats['tool_results']} 条")
-    out.append(f"> - 提取结果：用户提示词 **{stats['user']} 条**、助手回复 {stats['assistant']} 段、"
-               f"工具调用 {stats['tools']} 次、模型调用异常 {stats['errors']} 次")
-    out.append(">")
-    out.append("> **提取说明**：仅保留用户提示词、助手正文回复与工具调用摘要；"
-               "系统内部提示词（system prompt）、注入的 system-reminder、推理过程、"
-               "以及工具返回的原始内容均已过滤。"
-               f"助手回复超过 {max_chars} 字的部分做截断标注。")
-    out.append("")
-
+    # 先分组，再把头部统计**从分组结果反推**，确保与正文条目严格一致（不会各算各的）
     rounds: list[dict] = []
     for e in entries:
         if e["kind"] == "user" or not rounds:
@@ -320,6 +311,62 @@ def render(entries: list[dict], stats: dict, conv: dict, src: Path,
     while rounds and rounds[0]["user"] is None:
         leading.extend(rounds[0]["items"])
         rounds.pop(0)
+
+    n_round = sum(1 for r in rounds if r["user"])
+    n_user = sum(1 for e in entries if e["kind"] == "user")
+    n_assistant = sum(1 for e in entries if e["kind"] == "assistant")
+    n_tools = sum(len(e["items"]) for e in entries if e["kind"] == "tools")
+    n_errors = sum(1 for e in entries if e["kind"] == "error")
+    n_errors_leading = sum(1 for e in leading if e["kind"] == "error")
+
+    src_size = src.stat().st_size
+    src_hash = file_sha256(src)
+    generated = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+    out: list[str] = []
+    out.append("# AI 协作记录")
+    out.append("")
+    out.append(f"> 由 ZCode 会话日志自动提取，用于提交课程作业。生成时间：{generated}。")
+    out.append(">")
+    out.append("> **一、数据来源与校验**")
+    out.append(">")
+    out.append(f"> - 源日志文件：`{src.name}`")
+    out.append(f"> - 源日志大小 / 行数：{src_size / 1024 / 1024:.1f} MB / {conv['records']} 行"
+               f"（每行一次模型调用）")
+    out.append(f"> - 源日志 SHA256：`{src_hash}`")
+    out.append(f"> - 提取工具：`scripts/export_collab_record.py`，参数 `--max-chars {max_chars}`")
+    out.append(f"> - 会话 ID：`{session_id}`")
+    out.append(f"> - 时间范围：{span}")
+    out.append(">")
+    out.append("> **二、统计口径**（下列数字均可与正文条目逐一数验）")
+    out.append(">")
+    out.append(f"> - 收录轮次：**{n_round} 轮**")
+    out.append(f"> - 用户提示词：**{n_user} 条**；另剔除系统注入消息 {stats['skipped_reminder']} 条"
+               f"（`<system-reminder>` 与后台任务完成通知 `<task-notification>`，均非用户输入）")
+    out.append(f"> - 助手回复：{n_assistant} 段；工具调用：{n_tools} 次")
+    err_note = (f"（其中 {n_errors_leading} 次发生在首条提示词之前，见文末附注）"
+                if n_errors_leading else "")
+    out.append(f"> - 模型调用异常：{n_errors} 次{err_note}")
+    out.append(f"> - 未收录（已过滤）：系统内部消息 {stats['system']} 条、"
+               f"工具返回内容 {stats['tool_results']} 条、推理过程 {stats['reasoning']} 段")
+    out.append(">")
+    out.append("> **三、还原方法**")
+    out.append(">")
+    out.append(f"> 源日志共 {conv['records']} 条模型调用记录，其中 {conv['with_messages']} 条携带对话窗口"
+               f"（类型分布 {conv['kinds']}）。日志按滑动窗口记录，单条记录只含对话的一小段，"
+               f"故按 `messageOffset` 把各记录窗口拼接还原，得到 {conv.get('slots', 0)} 条会话消息"
+               f"（含上列已过滤部分）。")
+    out.append(">")
+    out.append("> **四、数字变动说明**")
+    out.append(">")
+    out.append("> 会话仍在进行，源日志持续追加，重新生成本文件时统计数字会增大；"
+               "若本文件与项目文档他处引用的数字不一致，请以本文件头部为准"
+               "（头部由渲染结果反推，与正文严格一致）。")
+    out.append(">")
+    out.append(f"> **五、提取说明**：仅保留用户提示词、助手正文回复与工具调用摘要；"
+               f"系统 prompt、system-reminder、推理过程、工具返回原文均已过滤；"
+               f"助手回复超过 {max_chars} 字的部分做截断标注。")
+    out.append("")
 
     out.append("## 轮次索引")
     out.append("")
@@ -400,9 +447,11 @@ def main() -> int:
     log(f"读取日志：{src}")
     recs = collect_records(src)
     slots, conv = stitch_conversation(recs)
+    conv["slots"] = len(slots)
     log(f"  日志记录 {conv['records']} 条｜带对话窗口 {conv['with_messages']} 条"
         f"（类型分布 {conv['kinds']}）")
-    log(f"  按 offset 拼接后还原会话消息 {len(slots)} 条（会话总长度 {conv['max_count']}）")
+    log(f"  按 offset 拼接：会话共 {conv['max_count']} 条消息，还原出 {len(slots)} 条"
+        f"（该计数含 system/tool 等被过滤的消息，与正文统计口径不同）")
 
     entries, stats = build_entries(slots, recs)
     log(f"  用户提示词 {stats['user']} 条｜助手回复 {stats['assistant']} 段｜"
