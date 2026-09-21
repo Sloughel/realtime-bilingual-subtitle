@@ -1,0 +1,55 @@
+# ---- Python ----
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 密钥与本地配置（严禁入库）----
+.env
+.env.local
+*.key
+config.local.yaml
+
+# ---- 模型与数据 ----
+models/
+*.pt
+*.bin
+*.onnx
+!server/app/assets/*.onnx
+data/
+*.wav
+*.mp3
+*.m4a
+!**/tests/fixtures/*.wav
+
+# ---- 日志与统计 ----
+logs/
+*.log
+latency_report.*
+
+# ---- Android / Gradle ----
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.apk
+*.aab
+*.keystore
+!android/app/debug.keystore
+.cxx/
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# ---- 系统 ----
+Thumbs.db
+Desktop.ini
+.DS_Store
