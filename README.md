@@ -54,6 +54,9 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 
 # 4. 验证 ASR 链路（用自带测试音频）
 .venv/Scripts/python.exe scripts/verify_asr.py
+
+# 5. 验证翻译链路（需先在 server/.env 填入翻译 API 密钥）
+.venv/Scripts/python.exe scripts/verify_translate.py
 ```
 
 ### 网络说明

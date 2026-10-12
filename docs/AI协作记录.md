@@ -1,28 +1,28 @@
 # AI 协作记录
 
-> 由 ZCode 会话日志自动提取，用于提交课程作业。生成时间：2026-10-12 18:49:20。
+> 由 ZCode 会话日志自动提取，用于提交课程作业。生成时间：2026-10-12 18:54:06。
 >
 > **一、数据来源与校验**
 >
 > - 源日志文件：`model-io-sess_812a17c4-8e11-40e8-8f10-7fd0cfa3aa1f.jsonl`
-> - 源日志大小 / 行数：42.7 MB / 184 行（每行一次模型调用）
-> - 源日志 SHA256：`e80aa88ca628c13ad38a809f4cfc9110e2a675687fc0622e321e24e67e39a981`
+> - 源日志大小 / 行数：45.1 MB / 194 行（每行一次模型调用）
+> - 源日志 SHA256：`539c69ec606d306926c4dc0ef6ee8cb74b238dae3303def6ba1f665e671837b4`
 > - 提取工具：`scripts/export_collab_record.py`，参数 `--max-chars 2000`
 > - 会话 ID：`sess_812a17c4-8e11-40e8-8f10-7fd0cfa3aa1f`
-> - 时间范围：2026-09-14 20:23:33 ~ 2026-10-12 18:49:07
+> - 时间范围：2026-09-14 20:23:33 ~ 2026-10-12 18:53:58
 >
 > **二、统计口径**（下列数字均可与正文条目逐一数验）
 >
-> - 收录轮次：**16 轮**
-> - 用户提示词：**16 条**；另剔除系统注入消息 6 条（`<system-reminder>` 与后台任务完成通知 `<task-notification>`，均非用户输入）
-> - 助手回复：121 段；工具调用：243 次
+> - 收录轮次：**17 轮**
+> - 用户提示词：**17 条**；另剔除系统注入消息 6 条（`<system-reminder>` 与后台任务完成通知 `<task-notification>`，均非用户输入）
+> - 助手回复：128 段；工具调用：265 次
 > - **人工决策（选项式提问的应答）：2 处**（原始记录中为工具应答，因属人工判断而保留，未按工具噪音过滤）
 > - 模型调用异常：7 次（其中 1 次发生在首条提示词之前，见文末附注）
-> - 未收录（已过滤）：系统内部消息 24 条、工具返回内容 243 条、推理过程 174 段
+> - 未收录（已过滤）：系统内部消息 25 条、工具返回内容 265 条、推理过程 184 段
 >
 > **三、还原方法**
 >
-> 源日志共 184 条模型调用记录，其中 183 条携带对话窗口（类型分布 {'full': 17, 'delta': 17, 'legacy-body': 1, 'tail': 148}）。日志按滑动窗口记录，单条记录只含对话的一小段，故按 `messageOffset` 把各记录窗口拼接还原，得到 466 条会话消息（含上列已过滤部分）。
+> 源日志共 194 条模型调用记录，其中 193 条携带对话窗口（类型分布 {'full': 17, 'delta': 18, 'legacy-body': 1, 'tail': 157}）。日志按滑动窗口记录，单条记录只含对话的一小段，故按 `messageOffset` 把各记录窗口拼接还原，得到 500 条会话消息（含上列已过滤部分）。
 >
 > **四、数字变动说明**
 >
@@ -52,6 +52,7 @@
 | 14 | 09-21 21:41 | 三项没有核实的内容我自己也还没准备好，所以暂且默认，晚些你再向我询问。不过，还没有上传githu… |
 | 15 | 09-21 21:49 | 我刚才打算在我伙伴的github上传并建立的，但是由于课程临时改变了要求，我打算延后这方面的处理… |
 | 16 | 10-12 18:45 | 好久没搞了，现在该干什么来着 |
+| 17 | 10-12 18:53 | 安卓版本16，APIkey我已经填了，你试试 |
 
 ## 轮 01　2026-09-14 20:23:33
 
@@ -1748,7 +1749,7 @@ V-03 确认了，我先把它落进文档。先找出所有"待确认"标注，�
 
 这是个**实质性缺陷**：你通过选项按钮做的所有决定（悬浮窗、DeepSeek、语言方向、交付物，以及刚才的"全部认可"）在日志里的角色是 `tool`，而我的提取器把所有工具消息都过滤掉了——**恰恰丢掉了课程最看重的"人工决策"部分**。修掉：
 
-### 🔧 工具调用（6 次）
+### 🔧 工具调用（7 次）
 
 - `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/scripts/export_collab_record.py
 - `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/scripts/export_collab_record.py
@@ -1756,6 +1757,113 @@ V-03 确认了，我先把它落进文档。先找出所有"待确认"标注，�
 - `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/scripts/export_collab_record.py
 - `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/scripts/export_collab_record.py
 - `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/scripts/export_collab_record.py
+- `Bash` cd /c/Users/38915/.zcode/workspace/default/bilingual-subtitle && .venv/Scripts/python.exe scripts/export_colla…
+
+### 🤖 助手回复
+
+人工决策现在被收录了（轮 03 的悬浮窗/DeepSeek 等决策，以及轮 16 本次确认），6 项统计口径全部自洽。**本次确认是轮 16**，据此更新文档：
+
+### 🔧 工具调用（5 次）
+
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/04-开发计划与任务分解.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/01-需求规格说明书.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/01-需求规格说明书.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/01-需求规格说明书.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/01-需求规格说明书.md
+
+### 🤖 助手回复
+
+补 02/03 里的三处默认值（按句翻译、medium 模型、端口 8000）的确认标注：
+
+### 🔧 工具调用（5 次）
+
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/02-系统架构设计.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/02-系统架构设计.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/03-接口与通信协议设计.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/03-接口与通信协议设计.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/03-接口与通信协议设计.md
+
+### 🤖 助手回复
+
+两处我用了全角竖线，在表格里不合适，改回普通括号：
+
+### 🔧 工具调用（4 次）
+
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/03-接口与通信协议设计.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/03-接口与通信协议设计.md
+- `Bash` cd /c/Users/38915/.zcode/workspace/default/bilingual-subtitle && .venv/Scripts/python.exe - <<'PYEOF' import r…
+- `Bash` cd /c/Users/38915/.zcode/workspace/default/bilingual-subtitle && git add -A && git diff --cached --stat 2>&1 |…
+
+### 🤖 助手回复
+
+V-03 已核实并落库（提交 `781df4b`），另外在核对过程中**发现并修复了一个实质性缺陷**。
+
+## 先说那个缺陷：协作记录一直在丢你最关键的决策
+
+你刚才通过选项按钮选"先补三项人工核实""全部认可"，我顺手查了下这些选择有没有进记录——**结果是没有**。
+
+原因：选项式提问的应答在日志里的角色是 `tool`，而我的提取器把**所有**工具消息都当成机器噪音过滤了。这意味着除了刚才这次，早先那些决策也全丢了：**悬浮窗形态、DeepSeek 后端、语言方向、交付物形式**——全都没进协作记录。
+
+这对课程交付是个真问题，因为 AI 协作记录的价值恰恰在于体现"人做了什么判断"。已修复：现在对 `AskUserQuestion` 的应答做例外保留，渲染成「🙋 人工决策」条目，并在头部统计里单列。当前收录 2 处（轮 03 的四个决策、轮 16 的本次决策），6 项统计口径依然自洽。
+
+## V-03 已确认（轮 16）
+
+五项全部认可：whisper medium 模型、端口 8000、静音断句 500ms、端到端延迟 ≤3s、按句翻译。我把 01 的 FR-05 和 NFR-01 标注从"待确认"改成"**轮 16 已确认**"，02 的 ADR-01、03 的 §9.1 和 §9.4 也同步标了，并新增"已确认"这个取值定义。
+
+## 剩下两项需要你动手
+
+**V-01 查手机 Android 版本**——两个办法，第二个更省事：
+
+1. 手动看：设置 → 关于手机 → 软件信息 → Android 版本（≥10 即可）
+2. **插 USB 让我读**：手机开启开发者模式和 USB 调试，用数据线连上电脑，我直接用 adb 读出版本号和机型，几秒钟的事
+
+**V-02 申请 DeepSeek API key**：
+
+1. 访问 platform.deepseek.com，注册登录后进 API keys 页面创建一个
+2. 注意是按量计费，需要充值（新用户通常有赠送额度，够课程演示用）
+3. 拿到后**别贴给我，你自己填进 `server/.env`**（该文件已被 gitignore 排除）——或者你想让我填也行，但要提醒：key 一旦出现在对话里，就会进 AI 协作记录，而那份记录是要提交的
+
+填完 key 我可以立刻用一句话做真实翻译验证，确认整条链路通（成本极低）。
+
+## 顺带一个可选项
+
+01 文档里还留着 6 处"待确认"，它们**不在 V-03 的五项里**，是课程评审那次修订时才加的：FR-03 帧方案、FR-19 配置项清单、NFR-03 阈值与语料规模、NFR-08 三分钟、NFR-10 用量上限、NFR-12 三十分钟。都属次要参数（改了不影响架构）。你要是一并认可，我就把这些标注也去掉；不认可或想先看看，就留着。
+
+这三件事处理完，就可以进 M1 了。
+
+## 轮 17　2026-10-12 18:53:08
+
+### 👤 用户提示词
+
+安卓版本16，APIkey我已经填了，你试试
+
+### 🤖 助手回复
+
+安卓 16 满足要求（≥10）。先确认 key 已正确载入，同时写好翻译验证脚本：
+
+### 🔧 工具调用（2 次）
+
+- `Bash` cd /c/Users/38915/.zcode/workspace/default/bilingual-subtitle && .venv/Scripts/python.exe scripts/check_env.py…
+- `Write` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/scripts/verify_translate.py
+
+### 🤖 助手回复
+
+环境自检**全绿**了（"环境就绪，可以进入 M1 服务端开发"）。现在真实调用 DeepSeek 验证翻译链路：
+
+### 🔧 工具调用（1 次）
+
+- `Bash` cd /c/Users/38915/.zcode/workspace/default/bilingual-subtitle && .venv/Scripts/python.exe scripts/verify_trans…
+
+### 🤖 助手回复
+
+**翻译链路验证通过**——3 句全部翻译正确，平均 888ms（预算 1500ms）、最大 1045ms，输出 8~9 tokens 远低于上限，译文干净无前缀无原文回显。把这个结果和安卓版本落进文档：
+
+### 🔧 工具调用（4 次）
+
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/04-开发计划与任务分解.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/01-需求规格说明书.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/01-需求规格说明书.md
+- `Edit` C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/04-开发计划与任务分解.md
 
 ## 附注：会话开始前的系统事件
 
