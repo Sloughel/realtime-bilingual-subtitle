@@ -168,7 +168,7 @@ def stitch_conversation(recs: list[dict]) -> tuple[dict[int, tuple[dict, str]], 
 def build_entries(slots: dict[int, tuple[dict, str]], recs: list[dict]) -> tuple[list[dict], dict]:
     """按全局下标顺序把消息转成条目，并把模型调用异常插入时间线。"""
     entries: list[dict] = []
-    stats = {"user": 0, "assistant": 0, "tools": 0, "errors": 0,
+    stats = {"user": 0, "assistant": 0, "tools": 0, "errors": 0, "decisions": 0,
              "skipped_reminder": 0, "reasoning": 0, "system": 0, "tool_results": 0}
 
     # 异常列表按时间排序，遇到不晚于当前消息时间的就先行输出
@@ -222,7 +222,14 @@ def build_entries(slots: dict[int, tuple[dict, str]], recs: list[dict]) -> tuple
             stats["system"] += 1
             continue
         if role == "tool":
-            stats["tool_results"] += 1
+            # 例外：选项式提问的应答是**人工决策**，不是机器噪音，必须保留
+            if (msg.get("toolName") or "") == "AskUserQuestion" and isinstance(content, str) and content.strip():
+                flush_text()
+                flush_tools()
+                stats["decisions"] += 1
+                entries.append({"kind": "decision", "ts": ts, "text": content.strip()})
+            else:
+                stats["tool_results"] += 1
             continue
 
         if role == "user":
@@ -318,6 +325,7 @@ def render(entries: list[dict], stats: dict, conv: dict, src: Path,
     n_tools = sum(len(e["items"]) for e in entries if e["kind"] == "tools")
     n_errors = sum(1 for e in entries if e["kind"] == "error")
     n_errors_leading = sum(1 for e in leading if e["kind"] == "error")
+    n_decisions = sum(1 for e in entries if e["kind"] == "decision")
 
     src_size = src.stat().st_size
     src_hash = file_sha256(src)
@@ -344,6 +352,8 @@ def render(entries: list[dict], stats: dict, conv: dict, src: Path,
     out.append(f"> - 用户提示词：**{n_user} 条**；另剔除系统注入消息 {stats['skipped_reminder']} 条"
                f"（`<system-reminder>` 与后台任务完成通知 `<task-notification>`，均非用户输入）")
     out.append(f"> - 助手回复：{n_assistant} 段；工具调用：{n_tools} 次")
+    out.append(f"> - **人工决策（选项式提问的应答）：{n_decisions} 处**（原始记录中为工具应答，"
+               f"因属人工判断而保留，未按工具噪音过滤）")
     err_note = (f"（其中 {n_errors_leading} 次发生在首条提示词之前，见文末附注）"
                 if n_errors_leading else "")
     out.append(f"> - 模型调用异常：{n_errors} 次{err_note}")
@@ -363,8 +373,9 @@ def render(entries: list[dict], stats: dict, conv: dict, src: Path,
                "若本文件与项目文档他处引用的数字不一致，请以本文件头部为准"
                "（头部由渲染结果反推，与正文严格一致）。")
     out.append(">")
-    out.append(f"> **五、提取说明**：仅保留用户提示词、助手正文回复与工具调用摘要；"
-               f"系统 prompt、system-reminder、推理过程、工具返回原文均已过滤；"
+    out.append(f"> **五、提取说明**：仅保留用户提示词、助手正文回复、**人工决策**与工具调用摘要；"
+               f"系统 prompt、system-reminder、推理过程、工具返回原文均已过滤"
+               f"（例外：选项式提问 `AskUserQuestion` 的应答属人工决策，故保留）；"
                f"助手回复超过 {max_chars} 字的部分做截断标注。")
     out.append("")
 
@@ -410,6 +421,11 @@ def render(entries: list[dict], stats: dict, conv: dict, src: Path,
                 out.append(f"### ⚠ 模型调用异常：{e['name']}")
                 out.append("")
                 out.append(e["message"])
+                out.append("")
+            elif e["kind"] == "decision":
+                out.append("### 🙋 人工决策（选项式提问）")
+                out.append("")
+                out.append(e["text"])
                 out.append("")
 
     # 首条用户提示词之前发生的系统事件，作为附注列在文末
