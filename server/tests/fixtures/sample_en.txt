@@ -1,0 +1,4 @@
+Hello. This is a test of the real time bilingual subtitle system.
+The audio you are hearing was generated on the host machine.
+We are checking whether speech recognition works correctly.
+Machine translation will convert these sentences into Chinese.

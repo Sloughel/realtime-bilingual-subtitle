@@ -9,7 +9,7 @@
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | M0 | 环境准备 | 已完成 |
-| M1 | 服务端全链路（协议 + 断句 + ASR + 翻译） | 未开始 |
+| M1 | 服务端全链路（协议 + 断句 + ASR + 翻译） | **已完成并实测通过** |
 | M2 | Android 客户端（双采集模式 + 悬浮窗） | 未开始 |
 | M3 | 端到端联调 | 未开始 |
 | M4 | 扩展（互联网 / 本地模型 / Linux / iOS·鸿蒙） | 未开始 |
@@ -62,6 +62,31 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 # 5. 验证翻译链路（需先在 server/.env 填入翻译 API 密钥）
 .venv/Scripts/python.exe scripts/verify_translate.py
 ```
+
+## 运行服务端（M1）
+
+```bash
+# 启动（监听 0.0.0.0:8000，端点 /ws）
+cd server && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+#   状态接口：GET /health、GET /status
+
+# 单元 / 集成测试（45 项）
+cd server && ../.venv/Scripts/python.exe -m pytest -q
+
+# 端到端自测：离线音频 → 真实识别 + 翻译 → 校验字幕 JSON，输出延迟报告
+.venv/Scripts/python.exe scripts/e2e_test.py --repeats 2
+
+# 不用 Android 客户端也能验证：向已启动的服务端灌入离线音频
+.venv/Scripts/python.exe scripts/mock_client.py --wav server/tests/fixtures/sample_en.wav --realtime
+
+# NFR-03 判据工具：ASR 词错率（WER） 与 翻译质量抽检（含人工评审表）
+.venv/Scripts/python.exe scripts/eval_asr_wer.py
+.venv/Scripts/python.exe scripts/eval_translation.py
+```
+
+服务端默认参数与预算依据见 [`docs/03-接口与通信协议设计.md`](docs/03-接口与通信协议设计.md) §9.4 与 §11；
+M1 的实测数据（ASR P95 616ms、翻译 P95 961ms、端到端 P95 2209ms 等）见
+[`docs/04-开发计划与任务分解.md`](docs/04-开发计划与任务分解.md) 的「M1 完成记录」。
 
 ### 网络说明
 
@@ -120,14 +145,14 @@ diff /tmp/regenerated.md docs/AI协作记录.md   # 时间戳/哈希段会不同
 
 ```
 bilingual-subtitle/
-├── docs/          # 设计文档（需求 / 架构 / 协议 / 计划）与项目状态交接说明
-├── server/        # Python 服务端
-│   ├── app/       # 应用代码（M1 阶段实现）
-│   ├── tests/     # 测试与测试音频
+├── docs/          # 设计文档（需求 / 架构 / 协议 / 计划）、状态交接说明、AI 协作记录
+├── server/        # Python 服务端（M1 已实现）
+│   ├── app/       # main / settings / protocol / dll / buffer / segmenter / asr / translate / session / connection / telemetry
+│   ├── tests/     # 45 项单元与集成测试；fixtures 内含测试音频与语料
 │   ├── .env.example
 │   └── requirements.txt
 ├── android/       # Android 客户端（M2 阶段实现）
-├── scripts/       # 环境自检、ASR 验证、模拟客户端等工具
+├── scripts/       # 环境自检、ASR/翻译验证、模拟客户端、端到端测试、WER 与翻译抽检
 └── README.md
 ```
 
