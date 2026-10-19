@@ -62,6 +62,7 @@ class SessionRegistry:
         if session is not None and session_id in self._detached_since:
             # 重连：复用状态，丢弃半句（02 §4.4）
             session.segmenter.reset()
+            session.reset_audio_clock()
             self._detached_since.pop(session_id, None)
             log.info("会话重连复用：%s（sentence_id 续至 %d）", session_id, session.sentence_id)
             return session, True

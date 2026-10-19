@@ -135,6 +135,12 @@ def test_status_endpoint_aggregates_latency(app, fixture_pcm16):
         assert status["latency"]["sentences"] >= 1
         assert "cost" in status
 
+        detail = client.get("/latency").json()
+        assert detail["records"], "无逐句延迟明细"
+        assert detail["summary"]["sentences"] == status["latency"]["sentences"]
+        # 正常路径不应出现几十秒的假延迟（重连旧帧映射问题）
+        assert all(r["total_ms"] < 60_000 for r in detail["records"])
+
         health = client.get("/health").json()
         assert health["status"] == "ok"
         assert health["asr"]["device"] == "stub"

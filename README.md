@@ -143,6 +143,14 @@ export JAVA_HOME=/c/Users/38915/dev/jdk17/jdk-17.0.20.1+1   # 或你自己的 JD
 注意：**HarmonyOS NEXT（5/6）只能经 Android 容器运行**，媒体声音与跨应用悬浮窗大概率不可用；
 HarmonyOS 4.x 及普通 Android 10+ 设备可正常安装。M3 验收建议使用 Android 真机。
 
+## M3 联调（真机）
+
+1. 重启服务端（`stop_server.bat` → `start_server.bat`），使跨会话统计与延迟修复生效；
+2. 双击 **`monitor_m3.bat`** 开始采样（每 10s 记录 RSS/GPU 到 `logs/m3_monitor.csv`，默认 45 分钟）；
+3. 按 [`docs/04-开发计划与任务分解.md`](docs/04-开发计划与任务分解.md) 的「M3 操作单」执行：
+   媒体模式 ≥10 分钟 → 热切麦克风 ≥10 分钟 → 断网重连 → 服务端重启 → 停止/开始 → 悬浮窗操作；
+4. 结束后访问 `http://127.0.0.1:8000/status` 与 `/latency`，连同 `logs/m3_monitor.csv` 交给 agent 分析。
+
 ### 网络说明
 
 本项目的模型权重托管在 HuggingFace，国内网络需二选一：

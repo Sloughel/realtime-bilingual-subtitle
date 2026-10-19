@@ -70,7 +70,7 @@ def main() -> int:
         f"翻译后端   : {settings.translate_base_url} / {settings.translate_model} "
         f"({'已配置密钥' if settings.translate_configured else '未配置，将降级为原文'})"
     )
-    print("状态接口   : /health 、/status")
+    print("状态接口   : /health 、/status 、/latency（逐句明细）")
     print("首次启动需加载 whisper 模型（约 10~30 秒）…")
     print("按 Ctrl+C 停止。")
     print("=" * 66)

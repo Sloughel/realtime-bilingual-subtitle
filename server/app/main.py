@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
@@ -125,6 +126,18 @@ def create_app(
                 "sessions": registry.active_count(),
                 "latency": registry.latency.summary(),
                 "cost": app.state.translation.cost.summary() if app.state.translation else {},
+            }
+        )
+
+    @app.get("/latency")
+    async def latency(limit: int = 500) -> JSONResponse:
+        """逐句延迟明细（NFR-01 报告用）。默认取最近 500 句。"""
+        registry: SessionRegistry = app.state.registry
+        records = registry.latency.records[-max(1, limit) :]
+        return JSONResponse(
+            {
+                "summary": registry.latency.summary(),
+                "records": [asdict(r) for r in records],
             }
         )
 

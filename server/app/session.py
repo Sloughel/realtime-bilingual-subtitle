@@ -112,12 +112,24 @@ class Session:
         return self._recv_marks[idx][1]
 
     # ---- 配置 ---------------------------------------------------------
+    def reset_audio_clock(self) -> None:
+        """重置会话内音频时间轴。
+
+        与 segmenter.reset() 配套使用：重连、切换配置或 reset 后，句子的
+        start_ms/end_ms 会从 0 重新计算，接收帧的到达时刻表也必须同步清空，
+        否则延迟查表会命中旧帧，算出几十秒甚至几分钟的假延迟。
+        """
+        self._recv_ms = 0
+        self._recv_marks.clear()
+        self._audio_origin_ms = None
+        self._last_lost = 0
+
     def apply_config(self, cfg: dict) -> None:
         self.config = cfg
         # 变更配置后重置管道，避免旧半句混入新会话
         self.segmenter.reset()
         self.buffer.reset()
-        self._last_lost = 0
+        self.reset_audio_clock()
         self.paused = True
 
     # ---- 音频 ---------------------------------------------------------
@@ -180,6 +192,7 @@ class Session:
         """丢弃未断句音频（reset，FR-09）。"""
         self.touch()
         self.segmenter.reset()
+        self.reset_audio_clock()
         while not self._queue.empty():
             try:
                 self._queue.get_nowait()
