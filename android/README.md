@@ -97,6 +97,9 @@ app/src/main/java/com/sloughel/bilingualsubtitle/
 - **音频用途不匹配**：本版仅捕获 `USAGE_MEDIA` / `USAGE_GAME` / `USAGE_UNKNOWN`；
   微信语音、通话使用 `USAGE_VOICE_COMMUNICATION`，不在范围。
 - **尚未开始播放**：先点开始再播放也可以，8 秒提示会在检测到声音后自动消失。
+- **系统级限制**：若系统图库、第三方播放器与音乐 App 全部为 0%，说明该 ROM 禁止第三方
+  音频捕获（实测华为部分机型如此）。本机无法完成媒体内录；可改用麦克风模式并让视频外放，
+  或换用其他 Android 设备。
 - **OEM 限制**：部分华为机型对纯音频投影不保持会话；本版已加 1×1 VirtualDisplay 保活。
   若仍为 0%，改用麦克风模式。
 
