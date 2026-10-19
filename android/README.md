@@ -17,7 +17,7 @@ export JAVA_HOME=/c/Users/38915/dev/jdk17/jdk-17.0.20.1+1   # 或设置为你自
 ```
 
 产物：`android/app/build/outputs/apk/debug/bilingual-subtitle-v<版本>-debug.apk`
-（当前为 `bilingual-subtitle-v0.1.3-debug.apk`，约 23 MB，debug 签名）。
+（当前为 `bilingual-subtitle-v0.1.4-debug.apk`，约 23 MB，debug 签名）。
 文件名带版本号，客户端页面顶部也显示版本，便于确认安装的是哪一版。
 
 ## 验证
@@ -32,7 +32,7 @@ cd android
 
 | 设备 | 方式 |
 |---|---|
-| Android 10+（含 HarmonyOS 4.x，底层仍为 Android） | `adb install -r bilingual-subtitle-v0.1.2-debug.apk`，或拷贝 APK 到手机点击安装 |
+| Android 10+（含 HarmonyOS 4.x，底层仍为 Android） | `adb install -r bilingual-subtitle-v0.1.4-debug.apk`，或拷贝 APK 到手机点击安装 |
 | HarmonyOS NEXT（5/6） | 只能经「卓易通」等 Android 容器安装；**媒体声音与跨应用悬浮窗大概率不可用**，仅麦克风模式可做冒烟测试 |
 
 ## 使用步骤
@@ -114,4 +114,4 @@ app/src/main/java/com/sloughel/bilingualsubtitle/
 
 - 目标应用若禁止音频捕获（`allowAudioPlaybackCapture=false`，如部分 DRM 内容），媒体模式会没有声音，需改用麦克风模式（FM-06）。
 - 悬浮窗需要系统授权；部分系统对后台弹窗/悬浮窗有额外限制。
-- HarmonyOS NEXT 的 Android 容器不暴露 MediaProjection 与跨应用悬浮窗，且无法用 adb/logcat 调试；M3 验收请优先使用 Android 真机。
+- HarmonyOS NEXT 的 Android 容器不暴露 MediaProjection 与跨应用悬浮窗，且无法用 adb/logcat 调试；M3 已使用 Redmi Pad SE 完成真机验收。
