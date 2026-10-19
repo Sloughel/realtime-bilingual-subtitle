@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sloughel.bilingualsubtitle.AppState
+import com.sloughel.bilingualsubtitle.BuildConfig
 import com.sloughel.bilingualsubtitle.CaptureMode
 import com.sloughel.bilingualsubtitle.UiState
 
@@ -100,20 +102,32 @@ fun ControlScreen(
                     Text("采集模式", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (mode == CaptureMode.MIC) {
-                            Button(onClick = { mode = CaptureMode.MIC }, modifier = Modifier.weight(1f)) {
+                            Button(onClick = {
+                                mode = CaptureMode.MIC
+                                AppState.update { it.copy(mode = CaptureMode.MIC) }
+                            }, modifier = Modifier.weight(1f)) {
                                 Text("麦克风")
                             }
                         } else {
-                            OutlinedButton(onClick = { mode = CaptureMode.MIC }, modifier = Modifier.weight(1f)) {
+                            OutlinedButton(onClick = {
+                                mode = CaptureMode.MIC
+                                AppState.update { it.copy(mode = CaptureMode.MIC) }
+                            }, modifier = Modifier.weight(1f)) {
                                 Text("麦克风")
                             }
                         }
                         if (mode == CaptureMode.MEDIA) {
-                            Button(onClick = { mode = CaptureMode.MEDIA }, modifier = Modifier.weight(1f)) {
+                            Button(onClick = {
+                                mode = CaptureMode.MEDIA
+                                AppState.update { it.copy(mode = CaptureMode.MEDIA) }
+                            }, modifier = Modifier.weight(1f)) {
                                 Text("媒体声音")
                             }
                         } else {
-                            OutlinedButton(onClick = { mode = CaptureMode.MEDIA }, modifier = Modifier.weight(1f)) {
+                            OutlinedButton(onClick = {
+                                mode = CaptureMode.MEDIA
+                                AppState.update { it.copy(mode = CaptureMode.MEDIA) }
+                            }, modifier = Modifier.weight(1f)) {
                                 Text("媒体声音")
                             }
                         }
@@ -123,6 +137,14 @@ fun ControlScreen(
                             "将采集其他应用播放的声音，需要系统授权。部分应用（含 DRM 内容）禁止捕获，"
                                 + "此时可改用麦克风模式。",
                             style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            if (state.capturing) {
+                                "媒体音量：${(state.captureLevel * 100).toInt()}%"
+                            } else {
+                                "媒体音量：未开始"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
                         )
                     }
                 }
@@ -247,6 +269,12 @@ fun ControlScreen(
                     }
                 }
             }
+
+            Text(
+                "客户端 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
