@@ -62,6 +62,11 @@ fun ControlScreen(
         ) {
             Text("实时双语字幕", style = MaterialTheme.typography.headlineSmall)
             Text(
+                "客户端 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
                 "手机采集音频 → 主机识别与翻译 → 悬浮窗显示",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -269,12 +274,6 @@ fun ControlScreen(
                     }
                 }
             }
-
-            Text(
-                "客户端 v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

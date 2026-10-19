@@ -113,7 +113,7 @@ M1 的实测数据（ASR P95 616ms、翻译 P95 961ms、端到端 P95 2209ms 等
 ```bash
 cd android
 export JAVA_HOME=/c/Users/38915/dev/jdk17/jdk-17.0.20.1+1   # 或你自己的 JDK 17
-./gradlew assembleDebug          # 产物：app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug          # 产物：app/build/outputs/apk/debug/bilingual-subtitle-v<版本>-debug.apk
 ./gradlew testDebugUnitTest      # 帧格式 / 重采样单元测试
 ./gradlew lintDebug              # 静态检查
 ```
