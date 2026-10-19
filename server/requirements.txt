@@ -10,6 +10,8 @@ websockets>=13
 pydantic>=2.9
 pydantic-settings>=2.6
 python-dotenv>=1.0
+# 识别 ZeroTier/VPN 等虚拟网卡地址（启动器优先显示 ZeroTier 地址；缺失时自动降级）
+psutil>=6.0
 
 # --- 音频处理 ---
 numpy>=1.26

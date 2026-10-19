@@ -93,6 +93,21 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 M1 的实测数据（ASR P95 616ms、翻译 P95 961ms、端到端 P95 2209ms 等）见
 [`docs/04-开发计划与任务分解.md`](docs/04-开发计划与任务分解.md) 的「M1 完成记录」。
 
+### 跨网络连接（ZeroTier）
+
+本机已加入 ZeroTier 网络（虚拟网卡 `10.243.9.41/24`）。手机不在同一局域网时，让手机也加入
+同一个 ZeroTier 网络，即可把服务器地址填成 ZeroTier 地址。启动器会自动识别 ZeroTier 网卡并
+把它排在「手机端填写」首位。
+
+1. 手机安装 **ZeroTier One**，加入与主机相同的 Network ID，并在 my.zerotier.com 中授权该设备。
+2. 首次使用：在 PC 上**以管理员身份运行** `allow_firewall.bat`。它只放行来自 ZeroTier 网段
+   （`10.243.9.0/24`）的 TCP 8000 入站，不影响其他网络。
+3. 双击 `start_server.bat` 启动服务端，手机端填写启动器打印的 `10.243.9.41:8000`。
+4. 连通性自检：手机浏览器打开 `http://10.243.9.41:8000/health`，能看到 JSON 即成功。
+
+> ZeroTier 在二层对流量加密，音频只在虚拟局域网内传输，与本项目"音频不出私有网络"的隐私定位一致；
+> 但应用层仍是 `ws://` 明文，E1 的 wss 与 token 鉴权仍按扩展计划实施。
+
 ## 构建 Android 客户端（M2）
 
 ```bash
