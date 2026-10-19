@@ -54,3 +54,35 @@ def test_new_session_continues_accumulating(settings):
         registry._sessions.pop(sid, None)
 
     assert registry.latency.summary()["sentences"] == 2
+
+
+def test_empty_asr_records_are_counted_separately(settings):
+    from app.connection import SessionRegistry
+    from app.telemetry import SentenceRecord
+
+    registry = SessionRegistry(settings, _Stub(), _Stub())
+    session, _ = registry.get_or_create("s-empty")
+    session.stats.add(
+        SentenceRecord(
+            sentence_id=1,
+            audio_ms=1000,
+            queue_wait_ms=0,
+            asr_ms=100,
+            translate_ms=0,
+            total_ms=0,
+            empty=True,
+        )
+    )
+    session.stats.add(
+        SentenceRecord(
+            sentence_id=2,
+            audio_ms=1000,
+            queue_wait_ms=0,
+            asr_ms=200,
+            translate_ms=300,
+            total_ms=1500,
+        )
+    )
+    summary = registry.latency.summary()
+    assert summary["sentences"] == 1  # 空识别不计入有效句
+    assert summary["empty_asr"] == 1

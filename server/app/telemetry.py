@@ -45,6 +45,8 @@ class SentenceRecord:
     translation_chars: int = 0
     degraded: bool = False
     failed: bool = False
+    empty: bool = False  # ASR 结果为空（FM-08 丢弃；保留记录以对齐 sentence_id）
+    session_id: str = ""  # 所属会话，便于区分重连/切模式后的编号重置
 
 
 @dataclass
@@ -74,18 +76,20 @@ class LatencyStats:
         return ordered[lo] + (ordered[hi] - ordered[lo]) * (k - lo)
 
     def summary(self) -> dict[str, float | int]:
-        totals = [r.total_ms for r in self.records]
+        usable = [r for r in self.records if not r.empty and not r.failed]
+        totals = [r.total_ms for r in usable]
         return {
-            "sentences": len(self.records),
+            "sentences": len(usable),
+            "empty_asr": sum(1 for r in self.records if r.empty),
             "total_ms_avg": round(statistics.fmean(totals), 1) if totals else 0.0,
             "total_ms_p50": round(self._pct(totals, 0.50), 1),
             "total_ms_p95": round(self._pct(totals, 0.95), 1),
             "total_ms_max": round(max(totals), 1) if totals else 0.0,
-            "asr_ms_p95": round(self._pct([r.asr_ms for r in self.records], 0.95), 1),
+            "asr_ms_p95": round(self._pct([r.asr_ms for r in usable], 0.95), 1),
             "translate_ms_p95": round(
-                self._pct([r.translate_ms for r in self.records], 0.95), 1
+                self._pct([r.translate_ms for r in usable], 0.95), 1
             ),
-            "degraded": sum(1 for r in self.records if r.degraded),
+            "degraded": sum(1 for r in usable if r.degraded),
             "failed": sum(1 for r in self.records if r.failed),
             "invalid_frames": self.invalid_frames,
             "lost_frames": self.lost_frames,

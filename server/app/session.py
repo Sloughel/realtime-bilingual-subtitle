@@ -201,6 +201,23 @@ class Session:
                 break
 
     # ---- 管道 ---------------------------------------------------------
+    def _record_failure(
+        self, sid: int, seg: Segment, queue_wait: int, asr_ms: int
+    ) -> None:
+        """ASR 失败也保留一条记录，使 /latency 的 sentence_id 连续（不计入 P95）。"""
+        self.stats.add(
+            SentenceRecord(
+                sentence_id=sid,
+                audio_ms=seg.duration_ms,
+                queue_wait_ms=queue_wait,
+                asr_ms=max(0, asr_ms),
+                translate_ms=0,
+                total_ms=0,
+                failed=True,
+                session_id=self.session_id,
+            )
+        )
+
     async def _run_worker(self) -> None:
         while True:
             item = await self._queue.get()
@@ -232,12 +249,14 @@ class Session:
             self._consecutive_asr_fail = 0
         except ModelUnavailableError as exc:
             log.error("模型不可用，停止接受音频（FM-05）：%s", exc)
+            self._record_failure(sid, seg, queue_wait, now_ms() - asr_t0)
             await self._emit_error(protocol.ERR_ASR_FAILED, "识别引擎不可用")
             self.blocked = True
             return
         except Exception as exc:  # noqa: BLE001
             self._consecutive_asr_fail += 1
             self.stats.asr_failures += 1
+            self._record_failure(sid, seg, queue_wait, now_ms() - asr_t0)
             log.warning(
                 "ASR 失败（第 %d/%d 次）：%s",
                 self._consecutive_asr_fail,
@@ -254,7 +273,19 @@ class Session:
             return
 
         if not source:
-            # FM-08：空结果静默丢弃，不打断字幕流
+            # FM-08：空结果静默丢弃；仍保留一条记录，使 /latency 的 sentence_id 连续可对照
+            self.stats.add(
+                SentenceRecord(
+                    sentence_id=sid,
+                    audio_ms=seg.duration_ms,
+                    queue_wait_ms=queue_wait,
+                    asr_ms=asr_ms,
+                    translate_ms=0,
+                    total_ms=0,
+                    empty=True,
+                    session_id=self.session_id,
+                )
+            )
             log.debug("句 %d 识别为空，丢弃", sid)
             return
 
@@ -276,6 +307,7 @@ class Session:
             source_chars=len(source),
             translation_chars=len(outcome.text),
             degraded=outcome.degraded,
+            session_id=self.session_id,
         )
         self.stats.add(record)
 
