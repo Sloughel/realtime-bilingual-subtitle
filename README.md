@@ -65,13 +65,18 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 
 ## 运行服务端（M1）
 
+**Windows 一键启动**：双击仓库根目录的 **`start_server.bat`**。它会加载配置与模型、
+打印手机端应填写的 IP（默认路由出口 + 其他候选），然后监听 8000 端口。
+
 ```bash
-# 启动（监听 0.0.0.0:8000，端点 /ws）
-cd server && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# 启动（监听 0.0.0.0:8000，端点 /ws）——推荐，会打印手机端应填的 IP
+.venv/Scripts/python.exe server/run_server.py
+# 或直接 uvicorn（不打印 IP 提示）
+(cd server && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000)
 #   状态接口：GET /health、GET /status
 
 # 单元 / 集成测试（45 项）
-cd server && ../.venv/Scripts/python.exe -m pytest -q
+(cd server && ../.venv/Scripts/python.exe -m pytest -q)
 
 # 端到端自测：离线音频 → 真实识别 + 翻译 → 校验字幕 JSON，输出延迟报告
 .venv/Scripts/python.exe scripts/e2e_test.py --repeats 2
