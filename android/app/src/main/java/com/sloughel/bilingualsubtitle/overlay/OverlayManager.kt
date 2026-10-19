@@ -137,6 +137,7 @@ object OverlayManager {
         val added = runCatching { wm.addView(root, params) }.isSuccess
         if (!added) {
             AppState.setError("悬浮窗添加失败（系统可能禁止显示在其他应用上层）")
+            AppState.setOverlay(false)
             return
         }
         container = root

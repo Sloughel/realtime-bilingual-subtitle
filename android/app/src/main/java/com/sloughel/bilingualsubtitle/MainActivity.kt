@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     private var pendingMode: CaptureMode = CaptureMode.MIC
     private var pendingHost: String = "192.168.1.100"
     private var pendingPort: Int = 8000
+    private var modeBeforeProjection: CaptureMode? = null
 
     /** 麦克风/通知权限申请（媒体模式还需随后申请 MediaProjection）。 */
     private val permissionLauncher = registerForActivityResult(
@@ -59,7 +60,13 @@ class MainActivity : ComponentActivity() {
         } else {
             AppState.setError("媒体声音授权被拒绝；可改用麦克风模式（FM-06）")
             AppState.log("MediaProjection 授权被拒绝")
+            // 若是在采集中切换模式被取消，恢复到服务端实际使用的模式
+            val revert = modeBeforeProjection
+            if (revert != null && AppState.state.value.capturing) {
+                AppState.update { it.copy(mode = revert) }
+            }
         }
+        modeBeforeProjection = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,6 +93,7 @@ class MainActivity : ComponentActivity() {
                     ControlScreen(
                         state = state,
                         onStart = ::onStartClicked,
+                        onModeSelected = ::onModeSelected,
                         onStop = ::stopCaptureService,
                         onOverlayToggle = ::onOverlayToggled,
                         onAlphaChange = ::onAlphaChanged,
@@ -144,6 +152,37 @@ class MainActivity : ComponentActivity() {
     private fun requestProjection() {
         val manager = getSystemService(MediaProjectionManager::class.java)
         projectionLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    /**
+     * 采集中点击另一个模式：真正切换采集模式。
+     *
+     * - 切到麦克风：直接让前台服务重启采集；
+     * - 切到媒体声音：需要新的 MediaProjection 授权，授权后服务重启采集。
+     * 未在采集中时只更新选择。
+     */
+    private fun onModeSelected(mode: CaptureMode, host: String, port: Int) {
+        val state = AppState.state.value
+        if (mode == state.mode) return
+        val previous = state.mode
+        AppState.update { it.copy(mode = mode) }
+        if (!state.capturing) return
+
+        pendingMode = mode
+        pendingHost = host
+        pendingPort = port
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("host", host)
+            .putInt("port", port)
+            .putString("mode", mode.wire)
+            .apply()
+
+        if (mode == CaptureMode.MEDIA) {
+            modeBeforeProjection = previous
+            requestProjection()
+        } else {
+            startCaptureService(CaptureMode.MIC)
+        }
     }
 
     private fun startCaptureService(mode: CaptureMode, data: Intent? = null, resultCode: Int = 0) {

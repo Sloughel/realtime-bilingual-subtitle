@@ -32,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sloughel.bilingualsubtitle.AppState
 import com.sloughel.bilingualsubtitle.BuildConfig
 import com.sloughel.bilingualsubtitle.CaptureMode
 import com.sloughel.bilingualsubtitle.UiState
@@ -42,6 +41,7 @@ import com.sloughel.bilingualsubtitle.UiState
 fun ControlScreen(
     state: UiState,
     onStart: (String, Int, CaptureMode, Boolean) -> Unit,
+    onModeSelected: (CaptureMode, String, Int) -> Unit,
     onStop: () -> Unit,
     onOverlayToggle: (Boolean) -> Unit,
     onAlphaChange: (Float) -> Unit,
@@ -49,8 +49,6 @@ fun ControlScreen(
 ) {
     var host by remember { mutableStateOf(state.host.ifBlank { "192.168.1.100" }) }
     var port by remember { mutableStateOf(state.port) }
-    var mode by remember { mutableStateOf(state.mode) }
-    var overlay by remember { mutableStateOf(state.overlayEnabled) }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -106,38 +104,50 @@ fun ControlScreen(
                 ) {
                     Text("采集模式", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (mode == CaptureMode.MIC) {
+                        if (state.mode == CaptureMode.MIC) {
                             Button(onClick = {
-                                mode = CaptureMode.MIC
-                                AppState.update { it.copy(mode = CaptureMode.MIC) }
+                                onModeSelected(
+                                    CaptureMode.MIC,
+                                    host.trim(),
+                                    port.toIntOrNull() ?: 8000,
+                                )
                             }, modifier = Modifier.weight(1f)) {
                                 Text("麦克风")
                             }
                         } else {
                             OutlinedButton(onClick = {
-                                mode = CaptureMode.MIC
-                                AppState.update { it.copy(mode = CaptureMode.MIC) }
+                                onModeSelected(
+                                    CaptureMode.MIC,
+                                    host.trim(),
+                                    port.toIntOrNull() ?: 8000,
+                                )
                             }, modifier = Modifier.weight(1f)) {
                                 Text("麦克风")
                             }
                         }
-                        if (mode == CaptureMode.MEDIA) {
+                        if (state.mode == CaptureMode.MEDIA) {
                             Button(onClick = {
-                                mode = CaptureMode.MEDIA
-                                AppState.update { it.copy(mode = CaptureMode.MEDIA) }
+                                onModeSelected(
+                                    CaptureMode.MEDIA,
+                                    host.trim(),
+                                    port.toIntOrNull() ?: 8000,
+                                )
                             }, modifier = Modifier.weight(1f)) {
                                 Text("媒体声音")
                             }
                         } else {
                             OutlinedButton(onClick = {
-                                mode = CaptureMode.MEDIA
-                                AppState.update { it.copy(mode = CaptureMode.MEDIA) }
+                                onModeSelected(
+                                    CaptureMode.MEDIA,
+                                    host.trim(),
+                                    port.toIntOrNull() ?: 8000,
+                                )
                             }, modifier = Modifier.weight(1f)) {
                                 Text("媒体声音")
                             }
                         }
                     }
-                    if (mode == CaptureMode.MEDIA) {
+                    if (state.mode == CaptureMode.MEDIA) {
                         Text(
                             "将采集其他应用播放的声音，需要系统授权。部分应用（含 DRM 内容）禁止捕获，"
                                 + "此时可改用麦克风模式。",
@@ -165,11 +175,8 @@ fun ControlScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("显示在其他应用上层", modifier = Modifier.weight(1f))
                         Switch(
-                            checked = overlay,
-                            onCheckedChange = {
-                                overlay = it
-                                onOverlayToggle(it)
-                            },
+                            checked = state.overlayEnabled,
+                            onCheckedChange = onOverlayToggle,
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -197,7 +204,7 @@ fun ControlScreen(
                     if (state.capturing) {
                         onStop()
                     } else {
-                        onStart(host.trim(), port.toIntOrNull() ?: 8000, mode, overlay)
+                        onStart(host.trim(), port.toIntOrNull() ?: 8000, state.mode, state.overlayEnabled)
                     }
                 },
                 modifier = Modifier

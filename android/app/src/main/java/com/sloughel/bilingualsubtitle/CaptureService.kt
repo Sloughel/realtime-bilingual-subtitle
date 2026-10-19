@@ -54,8 +54,10 @@ class CaptureService : Service(), WsClient.Listener {
     private var ws: WsClient? = null
     private var source: AudioSource? = null
     private var projection: MediaProjection? = null
+    private var projectionCallback: MediaProjection.Callback? = null
     private var mode: CaptureMode = CaptureMode.MIC
     private var stopping = false
+    private var switching = false
     private var mediaWatchdog: Job? = null
     private var mediaStartedAt = 0L
     private var lastSoundAt = 0L
@@ -67,7 +69,16 @@ class CaptureService : Service(), WsClient.Listener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopCapture()
-            ACTION_START -> startCapture(intent)
+            ACTION_START -> {
+                if (switching) {
+                    AppState.log("正在切换模式，请稍候")
+                } else if (ws != null) {
+                    // 采集中再次收到开始（用户切换了模式）：重启采集并应用新模式
+                    restartCapture(intent)
+                } else {
+                    startCapture(intent)
+                }
+            }
         }
         return START_NOT_STICKY
     }
@@ -104,13 +115,20 @@ class CaptureService : Service(), WsClient.Listener {
                 return
             }
             val manager = getSystemService(MediaProjectionManager::class.java)
-            projection = manager.getMediaProjection(code, data)
-            projection?.registerCallback(object : MediaProjection.Callback() {
+            val activeProjection = manager.getMediaProjection(code, data)
+            if (activeProjection == null) {
+                fail("媒体声音授权无效")
+                return
+            }
+            projection = activeProjection
+            val callback = object : MediaProjection.Callback() {
                 override fun onStop() {
                     AppState.setError("系统已停止媒体声音捕获，可切换为麦克风模式（FM-06）")
                     stopCapture()
                 }
-            }, Handler(Looper.getMainLooper()))
+            }
+            projectionCallback = callback
+            activeProjection.registerCallback(callback, Handler(Looper.getMainLooper()))
         }
 
         val host = intent.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
@@ -257,6 +275,49 @@ class CaptureService : Service(), WsClient.Listener {
     }
 
     // ------------------------------------------------------------------
+    /**
+     * 采集中切换模式：先停掉旧连接与音频源，再按新配置重新开始。
+     * 媒体→麦克风无需新授权；麦克风→媒体由 Activity 先取得新的 MediaProjection 再调用。
+     */
+    private fun restartCapture(intent: Intent) {
+        if (switching) {
+            AppState.log("正在切换模式，请稍候")
+            return
+        }
+        switching = true
+        val target = if (intent.getStringExtra(EXTRA_MODE) == CaptureMode.MEDIA.wire) {
+            CaptureMode.MEDIA
+        } else {
+            CaptureMode.MIC
+        }
+        AppState.log("切换采集模式 → ${target.label}，正在重启…")
+        AppState.setMediaHint(null)
+        AppState.setCaptureLevel(0f)
+
+        val old = ws
+        ws = null
+        stopAudio()
+        scope.launch {
+            old?.sendStop()
+            delay(300)
+            old?.close()
+            stopProjection()
+            startCapture(intent)
+            switching = false
+        }
+    }
+
+    /** 注销回调后再停止投影，避免 stop() 触发 onStop 把新会话一起停掉。 */
+    private fun stopProjection() {
+        val active = projection ?: return
+        projectionCallback?.let { callback ->
+            runCatching { active.unregisterCallback(callback) }
+        }
+        projectionCallback = null
+        runCatching { active.stop() }
+        projection = null
+    }
+
     private fun stopCapture() {
         if (stopping) return
         stopping = true
@@ -272,8 +333,7 @@ class CaptureService : Service(), WsClient.Listener {
             client.sendStop()      // 请求服务端冲刷当前句（FR-09）
             delay(400)
             client.close()
-            projection?.let { runCatching { it.stop() } }
-            projection = null
+            stopProjection()
             finishService()
         }
     }
@@ -281,6 +341,7 @@ class CaptureService : Service(), WsClient.Listener {
     private fun finishService() {
         AppState.setConnection(ConnectionState.DISCONNECTED, "未连接")
         AppState.setCapturing(false)
+        switching = false
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
     }
@@ -291,8 +352,8 @@ class CaptureService : Service(), WsClient.Listener {
         stopAudio()
         ws?.close()
         ws = null
-        projection?.let { runCatching { it.stop() } }
-        projection = null
+        stopProjection()
+        switching = false
         AppState.setCapturing(false)
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
@@ -302,8 +363,7 @@ class CaptureService : Service(), WsClient.Listener {
         stopAudio()
         ws?.close()
         ws = null
-        projection?.let { runCatching { it.stop() } }
-        projection = null
+        stopProjection()
         scope.cancel()
         super.onDestroy()
     }
