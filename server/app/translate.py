@@ -40,6 +40,7 @@ class TranslateOutcome(NamedTuple):
     error_code: int | None
     elapsed_ms: int
     usage: dict[str, Any]
+    attempts: int = 1
 
 
 class Translator(Protocol):
@@ -153,7 +154,15 @@ class DeepSeekTranslator:
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self.timeout)
+            # 句子间隔通常 8~15s，httpx 默认 keepalive_expiry 只有 5s，
+            # 会导致频繁重新建连/TLS 握手，放大翻译延迟抖动。
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout,
+                limits=httpx.Limits(
+                    max_keepalive_connections=5,
+                    keepalive_expiry=60.0,
+                ),
+            )
         return self._client
 
     async def aclose(self) -> None:
@@ -221,7 +230,13 @@ class DeepSeekTranslator:
                         last_error_code = ERR_TRANSLATE_FAILED
                         last_message = "返回内容为空"
                     else:
-                        return TranslateOutcome(out, False, None, elapsed, usage)
+                        if elapsed > 2000:
+                            log.warning(
+                                "翻译慢响应：%dms（第 %d 次尝试）", elapsed, attempt + 1
+                            )
+                        return TranslateOutcome(
+                            out, False, None, elapsed, usage, attempt + 1
+                        )
                 elif resp.status_code == 429:
                     last_error_code = ERR_TRANSLATE_FAILED
                     last_message = "触发限流（429）"
@@ -242,7 +257,7 @@ class DeepSeekTranslator:
                 await asyncio.sleep(2 ** attempt)  # 1s / 2s 指数退避（FM-02）
 
         # 全部重试失败 → 降级回传原文（FM-02 / FM-03）
-        return TranslateOutcome(text, True, last_error_code, 0, {})
+        return TranslateOutcome(text, True, last_error_code, 0, {}, attempt + 1)
 
 
 # ---------------------------------------------------------------------------

@@ -47,6 +47,7 @@ class SentenceRecord:
     failed: bool = False
     empty: bool = False  # ASR 结果为空（FM-08 丢弃；保留记录以对齐 sentence_id）
     session_id: str = ""  # 所属会话，便于区分重连/切模式后的编号重置
+    translate_attempts: int = 1  # 翻译尝试次数（>1 说明发生过重试）
 
 
 @dataclass
@@ -91,6 +92,9 @@ class LatencyStats:
             ),
             "degraded": sum(1 for r in usable if r.degraded),
             "failed": sum(1 for r in self.records if r.failed),
+            "translate_retries": sum(
+                max(0, r.translate_attempts - 1) for r in usable
+            ),
             "invalid_frames": self.invalid_frames,
             "lost_frames": self.lost_frames,
             "asr_failures": self.asr_failures,

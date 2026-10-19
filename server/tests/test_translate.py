@@ -128,6 +128,7 @@ async def test_retry_count_respects_setting():
         T.asyncio.sleep = orig
     assert client.calls == 3  # 首次 + 2 次重试
     assert out.degraded is True
+    assert out.attempts == 3
 
 
 async def test_null_translator_degrades():

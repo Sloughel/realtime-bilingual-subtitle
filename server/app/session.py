@@ -308,6 +308,7 @@ class Session:
             translation_chars=len(outcome.text),
             degraded=outcome.degraded,
             session_id=self.session_id,
+            translate_attempts=outcome.attempts,
         )
         self.stats.add(record)
 
