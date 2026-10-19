@@ -17,7 +17,7 @@ export JAVA_HOME=/c/Users/38915/dev/jdk17/jdk-17.0.20.1+1   # 或设置为你自
 ```
 
 产物：`android/app/build/outputs/apk/debug/bilingual-subtitle-v<版本>-debug.apk`
-（当前为 `bilingual-subtitle-v0.1.2-debug.apk`，约 23 MB，debug 签名）。
+（当前为 `bilingual-subtitle-v0.1.3-debug.apk`，约 23 MB，debug 签名）。
 文件名带版本号，客户端页面顶部也显示版本，便于确认安装的是哪一版。
 
 ## 验证
@@ -90,6 +90,8 @@ app/src/main/java/com/sloughel/bilingualsubtitle/
 
 捕获为静音的常见原因：
 
+- **系统应用/图库禁止捕获**：华为「图库」等系统播放器通常关闭了 `allowAudioPlaybackCapture`
+  （实测本地视频经图库播放时电平为 0%）。换用第三方播放器（VLC、MX Player）或浏览器播放。
 - **目标应用禁止捕获**：部分视频应用（含 DRM 内容）设置 `allowAudioPlaybackCapture=false`。
   换用 YouTube 或本地播放器测试；Bilibili/部分国内视频 App 可能不可捕获。
 - **音频用途不匹配**：本版仅捕获 `USAGE_MEDIA` / `USAGE_GAME` / `USAGE_UNKNOWN`；

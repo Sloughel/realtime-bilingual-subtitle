@@ -224,10 +224,10 @@ class CaptureService : Service(), WsClient.Listener {
                 if (now - maxOf(mediaStartedAt, lastSoundAt) >= 8_000 && !mediaHintSent) {
                     mediaHintSent = true
                     AppState.setMediaHint(
-                        "8 秒内未捕获到媒体声音。请确认正在播放视频；部分应用（含 DRM 内容）" +
-                            "禁止音频捕获，可停止后改用麦克风模式。"
+                        "8 秒内未捕获到媒体声音。系统图库、部分系统应用与 DRM 内容会禁止音频捕获；" +
+                            "请换用第三方播放器（如 VLC）或浏览器播放视频。仍无声音时请改用麦克风模式。"
                     )
-                    AppState.log("媒体声音为静音：目标应用可能禁止捕获（FM-06）")
+                    AppState.log("媒体声音持续为 0：目标应用可能禁止捕获（FM-06）")
                 }
                 delay(1_000)
             }
