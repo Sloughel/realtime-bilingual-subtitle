@@ -1,20 +1,22 @@
 @echo off
-chcp 65001 >nul
-title 实时双语字幕 - 服务端
+title Realtime Bilingual Subtitle - Server
 cd /d "%~dp0"
 
-if not exist ".venv\Scripts\python.exe" (
-  echo [错误] 未找到 .venv 虚拟环境。
-  echo        请先按 README「快速开始」安装依赖。
-  pause
-  exit /b 1
-)
+if not exist ".venv\Scripts\python.exe" goto NO_VENV
 
-echo 正在启动实时双语字幕服务端……
+echo Starting Realtime Bilingual Subtitle server...
+echo Press Ctrl+C to stop.
 echo.
-
 ".venv\Scripts\python.exe" "server\run_server.py"
-
+set CODE=%ERRORLEVEL%
 echo.
-echo 服务端已退出。
+echo Server exited. Code: %CODE%
 pause
+exit /b %CODE%
+
+:NO_VENV
+echo.
+echo [ERROR] .venv not found.
+echo Please install dependencies first (see README "Quick Start").
+pause
+exit /b 1
