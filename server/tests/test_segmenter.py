@@ -92,7 +92,7 @@ def test_reset_discards_pending(pcm):
 
 
 def test_max_sentence_forces_split(pcm):
-    """句长上限 15s 的机制：用 1s 上限验证强制切分。"""
+    """句长上限机制：用 1s 上限验证强制切分。"""
     seg = Segmenter(max_sentence_ms=1000, pre_roll_ms=0)
     segments = feed_all(seg, slice_ms(pcm, 1.5, 4.1))  # 2.6s 连续语音
     tail = seg.flush()

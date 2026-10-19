@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # ---------- 断句（VAD）----------
     vad_min_silence_ms: int = 500
     vad_min_speech_ms: int = 300
-    vad_max_sentence_ms: int = 15000
+    vad_max_sentence_ms: int = 8000
     vad_threshold: float = 0.5
     vad_neg_threshold: float | None = None  # 留空则按 threshold-0.15 推导
     vad_pre_roll_ms: int = 200

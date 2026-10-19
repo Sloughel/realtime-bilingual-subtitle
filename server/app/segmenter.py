@@ -102,7 +102,7 @@ class Segmenter:
         sample_rate: int = 16000,
         min_silence_ms: int = 500,
         min_speech_ms: int = 300,
-        max_sentence_ms: int = 15000,
+        max_sentence_ms: int = 8000,
         threshold: float = 0.5,
         neg_threshold: float | None = None,
         pre_roll_ms: int = 200,
@@ -235,7 +235,7 @@ class Segmenter:
             self._silence_run += VAD_WINDOW_SAMPLES
         # 过渡区（neg_threshold ≤ prob < threshold）保持现状，不计入静音
 
-        # 句长硬上限（FR-05：句长达到 15s 强制切分）
+        # 句长硬上限（FR-05：句长达到 8s 强制切分；M3 实测 15s 会使 P95 超预算）
         if win_end - self._seg_start >= self.max_sentence_samples:
             cut = self._max_cut_point(win_end)
             return self._finalize(cut, continue_speech=True)
