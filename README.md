@@ -10,7 +10,7 @@
 |---|---|---|
 | M0 | 环境准备 | 已完成 |
 | M1 | 服务端全链路（协议 + 断句 + ASR + 翻译） | **已完成并实测通过** |
-| M2 | Android 客户端（双采集模式 + 悬浮窗） | 未开始 |
+| M2 | Android 客户端（双采集模式 + 悬浮窗） | **已实现，待真机验证** |
 | M3 | 端到端联调 | 未开始 |
 | M4 | 扩展（互联网 / 本地模型 / Linux / iOS·鸿蒙） | 未开始 |
 | M5 | 报告与演示 | 未开始 |
@@ -88,6 +88,20 @@ cd server && ../.venv/Scripts/python.exe -m pytest -q
 M1 的实测数据（ASR P95 616ms、翻译 P95 961ms、端到端 P95 2209ms 等）见
 [`docs/04-开发计划与任务分解.md`](docs/04-开发计划与任务分解.md) 的「M1 完成记录」。
 
+## 构建 Android 客户端（M2）
+
+```bash
+cd android
+export JAVA_HOME=/c/Users/38915/dev/jdk17/jdk-17.0.20.1+1   # 或你自己的 JDK 17
+./gradlew assembleDebug          # 产物：app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest      # 帧格式 / 重采样单元测试
+./gradlew lintDebug              # 静态检查
+```
+
+安装、权限与已知限制见 [`android/README.md`](android/README.md)。
+注意：**HarmonyOS NEXT（5/6）只能经 Android 容器运行**，媒体声音与跨应用悬浮窗大概率不可用；
+HarmonyOS 4.x 及普通 Android 10+ 设备可正常安装。M3 验收建议使用 Android 真机。
+
 ### 网络说明
 
 本项目的模型权重托管在 HuggingFace，国内网络需二选一：
@@ -151,7 +165,7 @@ bilingual-subtitle/
 │   ├── tests/     # 45 项单元与集成测试；fixtures 内含测试音频与语料
 │   ├── .env.example
 │   └── requirements.txt
-├── android/       # Android 客户端（M2 阶段实现）
+├── android/       # Android 客户端（M2 已实现）：Gradle/Kotlin/Compose，见 android/README.md
 ├── scripts/       # 环境自检、ASR/翻译验证、模拟客户端、端到端测试、WER 与翻译抽检
 └── README.md
 ```
