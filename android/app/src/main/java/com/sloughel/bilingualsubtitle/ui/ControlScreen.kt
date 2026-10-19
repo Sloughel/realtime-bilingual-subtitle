@@ -199,6 +199,19 @@ fun ControlScreen(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(state.statusText, style = MaterialTheme.typography.bodySmall)
+                    if (state.mode == CaptureMode.MEDIA && state.capturing) {
+                        Text(
+                            "媒体音量：${(state.captureLevel * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    state.mediaHint?.let {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     if (state.lastSource.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
                         Text(state.lastSource, style = MaterialTheme.typography.bodyLarge)

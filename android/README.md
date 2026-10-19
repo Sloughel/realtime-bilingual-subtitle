@@ -75,6 +75,26 @@ app/src/main/java/com/sloughel/bilingualsubtitle/
     └── ControlScreen.kt  Compose 控制页
 ```
 
+## 媒体声音排障
+
+媒体模式采集时，状态卡会显示「媒体音量：xx%」（捕获音频的 RMS）。按以下判据定位：
+
+| 现象 | 含义 | 处理 |
+|---|---|---|
+| 音量 > 0%，但无字幕 | 音频已捕获，问题在服务端/断句 | 检查主机日志、网络与翻译 |
+| 音量 0%，8 秒后出现提示 | 捕获为静音 | 见下 |
+| 出现红色错误文字 | 初始化/授权失败 | 按文字提示处理 |
+
+捕获为静音的常见原因：
+
+- **目标应用禁止捕获**：部分视频应用（含 DRM 内容）设置 `allowAudioPlaybackCapture=false`。
+  换用 YouTube 或本地播放器测试；Bilibili/部分国内视频 App 可能不可捕获。
+- **音频用途不匹配**：本版仅捕获 `USAGE_MEDIA` / `USAGE_GAME` / `USAGE_UNKNOWN`；
+  微信语音、通话使用 `USAGE_VOICE_COMMUNICATION`，不在范围。
+- **尚未开始播放**：先点开始再播放也可以，8 秒提示会在检测到声音后自动消失。
+- **OEM 限制**：部分华为机型对纯音频投影不保持会话；本版已加 1×1 VirtualDisplay 保活。
+  若仍为 0%，改用麦克风模式。
+
 ## 已知限制
 
 - 目标应用若禁止音频捕获（`allowAudioPlaybackCapture=false`，如部分 DRM 内容），媒体模式会没有声音，需改用麦克风模式（FM-06）。

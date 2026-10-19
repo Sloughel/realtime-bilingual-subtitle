@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.sloughel.bilingualsubtitle.audio.AudioSource
 import com.sloughel.bilingualsubtitle.audio.MediaSource
@@ -21,9 +22,11 @@ import com.sloughel.bilingualsubtitle.net.WsClient
 import com.sloughel.bilingualsubtitle.overlay.OverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -53,6 +56,11 @@ class CaptureService : Service(), WsClient.Listener {
     private var projection: MediaProjection? = null
     private var mode: CaptureMode = CaptureMode.MIC
     private var stopping = false
+    private var mediaWatchdog: Job? = null
+    private var mediaStartedAt = 0L
+    private var lastSoundAt = 0L
+    private var lastLevelUiAt = 0L
+    private var mediaHintSent = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -164,7 +172,7 @@ class CaptureService : Service(), WsClient.Listener {
                     fail("媒体声音捕获未授权")
                     return
                 }
-                MediaSource(active)
+                MediaSource(active) { level -> onMediaLevel(level) }
             }
         }
         try {
@@ -176,15 +184,64 @@ class CaptureService : Service(), WsClient.Listener {
         source = audioSource
         AppState.setCapturing(true)
         AppState.log("开始采集（${mode.label}）")
+        if (mode == CaptureMode.MEDIA) startMediaWatchdog()
         if (AppState.state.value.overlayEnabled && !OverlayManager.show(this)) {
             AppState.setOverlay(false)
             AppState.setError("未获得悬浮窗权限，字幕仅在应用内显示")
         }
     }
 
+    /** 媒体声音电平回调（采集线程，约 5 次/秒）。 */
+    private fun onMediaLevel(level: Float) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastLevelUiAt >= 200) {
+            lastLevelUiAt = now
+            AppState.setCaptureLevel(level)
+        }
+        if (level > 0.003f) {
+            lastSoundAt = now
+            if (mediaHintSent) {
+                mediaHintSent = false
+                AppState.setMediaHint(null)
+                AppState.log("已检测到媒体声音")
+            }
+        }
+    }
+
+    /**
+     * 8 秒内未捕获到非静音数据时给出可操作提示（FM-06）。
+     * 常见原因：目标应用禁止音频捕获、DRM 内容、或尚未开始播放。
+     */
+    private fun startMediaWatchdog() {
+        mediaWatchdog?.cancel()
+        mediaStartedAt = SystemClock.elapsedRealtime()
+        lastSoundAt = mediaStartedAt
+        mediaHintSent = false
+        mediaWatchdog = scope.launch {
+            delay(8_000)
+            while (isActive && mode == CaptureMode.MEDIA && source != null) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - maxOf(mediaStartedAt, lastSoundAt) >= 8_000 && !mediaHintSent) {
+                    mediaHintSent = true
+                    AppState.setMediaHint(
+                        "8 秒内未捕获到媒体声音。请确认正在播放视频；部分应用（含 DRM 内容）" +
+                            "禁止音频捕获，可停止后改用麦克风模式。"
+                    )
+                    AppState.log("媒体声音为静音：目标应用可能禁止捕获（FM-06）")
+                }
+                delay(1_000)
+            }
+        }
+    }
+
     private fun stopAudio() {
+        mediaWatchdog?.cancel()
+        mediaWatchdog = null
         source?.stop()
         source = null
+        AppState.setCaptureLevel(0f)
+        AppState.setMediaHint(null)
+        mediaHintSent = false
     }
 
     private fun sendFrame(samples: ShortArray) {

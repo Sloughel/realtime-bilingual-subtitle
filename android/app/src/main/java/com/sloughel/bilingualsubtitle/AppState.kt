@@ -34,6 +34,8 @@ data class UiState(
     val error: String? = null,
     val overlayEnabled: Boolean = false,
     val overlayAlpha: Float = 0.85f,
+    val captureLevel: Float = 0f,
+    val mediaHint: String? = null,
     val logs: List<String> = emptyList(),
     val sentenceCount: Int = 0,
 )
@@ -82,10 +84,19 @@ object AppState {
         update { it.copy(overlayAlpha = alpha.coerceIn(0.2f, 1f)) }
     }
 
+    /** 媒体声音实时电平（0~1），用于判断是否真的捕获到了声音。 */
+    fun setCaptureLevel(level: Float) {
+        update { it.copy(captureLevel = level.coerceIn(0f, 1f)) }
+    }
+
+    fun setMediaHint(hint: String?) {
+        update { it.copy(mediaHint = hint) }
+    }
+
     fun log(message: String) {
         update {
             val stamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-            it.copy(logs = (it.logs + "[$stamp] $message").takeLast(8))
+            it.copy(logs = (it.logs + "[$stamp] $message").takeLast(20))
         }
     }
 }
