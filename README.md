@@ -68,6 +68,11 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 **Windows 一键启动**：双击仓库根目录的 **`start_server.bat`**。它会加载配置与模型、
 打印手机端应填写的 IP（默认路由出口 + 其他候选），然后监听 8000 端口。
 
+**停止/重启**：双击 **`stop_server.bat`**（按端口查找，只会结束 Python 进程并先确认）。
+
+**端口被占用**：若提示 `[Errno 10048]`，说明已有一个服务端在运行。启动器会直接打印
+占用端口的 PID 与三种处理方式（直接使用 / 停止后重启 / 改用其他端口），不再是原始 traceback。
+
 ```bash
 # 启动（监听 0.0.0.0:8000，端点 /ws）——推荐，会打印手机端应填的 IP
 .venv/Scripts/python.exe server/run_server.py

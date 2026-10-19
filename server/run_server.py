@@ -4,17 +4,12 @@
 
     .venv/Scripts/python.exe server/run_server.py
 
-等价于在 `server/` 目录下执行::
-
-    ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-
 配置来自 `server/.env`（SERVER_HOST / SERVER_PORT / WHISPER_* / TRANSLATE_* 等）。
-启动后会打印手机端应填写的主机局域网 IP。
+启动前检查端口占用，并打印手机端应填写的主机地址（优先 ZeroTier）。
 """
 
 from __future__ import annotations
 
-import socket
 import sys
 from pathlib import Path
 
@@ -26,109 +21,48 @@ import uvicorn  # noqa: E402
 
 from app.main import app  # noqa: E402
 from app.settings import APP_VERSION, get_settings  # noqa: E402
-
-
-def _default_route_ip() -> str:
-    """取默认路由的出口地址（UDP connect 只做路由选择，不实际发包）。"""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.connect(("8.8.8.8", 80))
-        return sock.getsockname()[0]
-    except OSError:
-        return "127.0.0.1"
-    finally:
-        sock.close()
-
-
-def _is_private(ip: str) -> bool:
-    parts = ip.split(".")
-    if len(parts) != 4 or not all(p.isdigit() for p in parts):
-        return False
-    a, b = int(parts[0]), int(parts[1])
-    return a == 10 or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168)
-
-
-def zerotier_ip() -> str | None:
-    """返回 ZeroTier 虚拟网卡的 IPv4（存在且已启用时）。
-
-    依赖 psutil；未安装时静默返回 None，不影响启动（候选列表仍会包含该地址）。
-    """
-    try:
-        import psutil
-    except ImportError:
-        return None
-    try:
-        stats = psutil.net_if_stats()
-        for name, addrs in psutil.net_if_addrs().items():
-            if "zerotier" not in name.lower():
-                continue
-            if name in stats and not stats[name].isup:
-                continue
-            for addr in addrs:
-                if (
-                    addr.family == socket.AF_INET
-                    and addr.address
-                    and not addr.address.startswith(("127.", "169.254."))
-                ):
-                    return addr.address
-    except Exception:  # noqa: BLE001 - 识别失败不应影响启动
-        return None
-    return None
-
-
-def ipv4_candidates() -> list[str]:
-    """列出可供手机连接的 IPv4 候选。
-
-    排序：**ZeroTier 地址优先**（便于跨网络联调）→ 默认路由出口 → 其他私网地址。
-    自动排除回环与 169.254.*（未获取到 DHCP 的链路本地地址）。
-    本机若装有 VMware / VirtualBox / VPN，其地址仍会出现在候选里，需要部署者排除。
-    """
-    primary = _default_route_ip()
-    zt = zerotier_ip()
-    found: set[str] = set()
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            ip = info[4][0]
-            if ip.startswith("127.") or ip.startswith("169.254."):
-                continue
-            found.add(ip)
-    except OSError:
-        pass
-    if not primary.startswith(("127.", "169.254.")):
-        found.add(primary)
-    if zt:
-        found.add(zt)
-
-    def rank(ip: str) -> tuple[int, str]:
-        if zt and ip == zt:
-            return (0, ip)
-        if ip == primary:
-            return (1, ip)
-        if _is_private(ip):
-            return (2, ip)
-        return (3, ip)
-
-    return sorted(found, key=rank)
+from netutil import ipv4_candidates, port_in_use, port_owner, zerotier_ip  # noqa: E402
 
 
 def main() -> int:
     settings = get_settings()
+    port = settings.server_port
+
+    # ---- 端口占用预检：给出可操作提示，而不是 uvicorn 的原始 traceback ----
+    if port_in_use(settings.server_host, port):
+        owner = port_owner(port)
+        print("=" * 66)
+        print(f"[错误] 端口 {port} 已被占用，无法启动第二个服务端。")
+        if owner:
+            pid, name, exe = owner
+            print(f"占用进程 : PID {pid}  {name}")
+            print(f"路径     : {exe}")
+        print()
+        print("可能上次启动的服务端仍在运行。可选处理：")
+        print("  1) 直接使用它：浏览器打开 http://<本机IP>:%d/health 验证" % port)
+        print("  2) 停止它：双击 stop_server.bat（仅会结束占用端口的 Python 进程）")
+        if owner:
+            print(f"     或手动：taskkill /PID {owner[0]} /F")
+        print(f"  3) 换端口：在 server/.env 设置 SERVER_PORT=8001 后重试")
+        print("=" * 66)
+        return 2
+
     candidates = ipv4_candidates()
     zt = zerotier_ip()
     primary = candidates[0] if candidates else "127.0.0.1"
     print("=" * 66)
     print(f"实时双语字幕服务端  v{APP_VERSION}")
     print("=" * 66)
-    print(f"监听地址   : {settings.server_host}:{settings.server_port}")
+    print(f"监听地址   : {settings.server_host}:{port}")
     hint = "ZeroTier 虚拟局域网" if zt and primary == zt else "默认路由出口"
-    print(f"手机端填写 : {primary}:{settings.server_port}   （{hint}）")
+    print(f"手机端填写 : {primary}:{port}   （{hint}）")
     if some := candidates[1:]:
         print(f"其他候选   : {', '.join(some)}")
     if zt:
         print(f"ZeroTier   : {zt}（手机需安装 ZeroTier One 并加入同一网络）")
     print(
         f"             若手机连不上：用浏览器访问 "
-        f"http://{primary}:{settings.server_port}/health 自检；"
+        f"http://{primary}:{port}/health 自检；"
     )
     print("             并以管理员身份运行 allow_firewall.bat 放行 8000/TCP（仅 ZeroTier 网段）。")
     print(f"识别设备   : {settings.whisper_device} / {settings.whisper_compute_type}")
@@ -142,13 +76,13 @@ def main() -> int:
     print("=" * 66)
     if primary == "127.0.0.1":
         print("提示：未获取到可用 IPv4，请确认已连接 Wi-Fi/网线。")
-    print("提示：若手机连不上，请检查 Windows 防火墙是否放行 Python 的 8000/TCP 端口。")
+    print("提示：若手机连不上，请检查 Windows 防火墙是否放行 Python 的端口。")
     print()
 
     uvicorn.run(
         app,
         host=settings.server_host,
-        port=settings.server_port,
+        port=port,
         log_level=settings.log_level.lower(),
     )
     return 0
