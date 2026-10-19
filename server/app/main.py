@@ -119,34 +119,16 @@ def create_app(
     @app.get("/status")
     async def status() -> JSONResponse:
         registry: SessionRegistry = app.state.registry
-        sessions = registry.sessions()
-        latency = _aggregate_latency(sessions)
-        cost = app.state.translation.cost.summary() if app.state.translation else {}
         return JSONResponse(
             {
                 "version": APP_VERSION,
                 "sessions": registry.active_count(),
-                "latency": latency,
-                "cost": cost,
+                "latency": registry.latency.summary(),
+                "cost": app.state.translation.cost.summary() if app.state.translation else {},
             }
         )
 
     return app
-
-
-def _aggregate_latency(sessions) -> dict:  # noqa: ANN001
-    """把各会话的延迟记录汇总成一份统计。"""
-    from .telemetry import LatencyStats
-
-    merged = LatencyStats()
-    for s in sessions:
-        merged.records.extend(s.stats.records)
-        merged.invalid_frames += s.stats.invalid_frames
-        merged.lost_frames += s.buffer.lost
-        merged.asr_failures += s.stats.asr_failures
-        merged.translate_failures += s.stats.translate_failures
-        merged.queue_drops += s.stats.queue_drops
-    return merged.summary()
 
 
 app = create_app()

@@ -19,7 +19,7 @@ from .protocol import (
 )
 from .session import Session
 from .settings import Settings
-from .telemetry import get_logger, now_ms
+from .telemetry import LatencyStats, get_logger, now_ms
 from .translate import TranslationService
 
 log = get_logger("connection")
@@ -52,6 +52,8 @@ class SessionRegistry:
         self.translation = translation
         self._sessions: dict[str, Session] = {}
         self._detached_since: dict[str, int] = {}
+        # 跨会话累计的延迟/错误统计：会话过期回收后仍保留，供 /status 与 NFR-01 报告使用
+        self.latency = LatencyStats()
 
     # ------------------------------------------------------------------
     def get_or_create(self, session_id: str) -> tuple[Session, bool]:
@@ -64,7 +66,13 @@ class SessionRegistry:
             log.info("会话重连复用：%s（sentence_id 续至 %d）", session_id, session.sentence_id)
             return session, True
         if session is None:
-            session = Session(session_id, self.settings, self.asr, self.translation)
+            session = Session(
+                session_id,
+                self.settings,
+                self.asr,
+                self.translation,
+                stats=self.latency,
+            )
             self._sessions[session_id] = session
             log.info("新建会话：%s", session_id)
             return session, False

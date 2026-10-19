@@ -22,6 +22,7 @@ import numpy as np
 from . import protocol
 from .asr import ASREngine, ModelUnavailableError
 from .buffer import AudioBuffer
+from .protocol import ProtocolError
 from .segmenter import Segment, Segmenter
 from .settings import Settings
 from .telemetry import LatencyStats, SentenceRecord, get_logger, now_ms
@@ -44,6 +45,7 @@ class Session:
         settings: Settings,
         asr: ASREngine,
         translation: TranslationService,
+        stats: LatencyStats | None = None,
     ) -> None:
         self.session_id = session_id
         self.settings = settings
@@ -53,13 +55,15 @@ class Session:
         self.config: dict | None = None
         self.buffer = AudioBuffer()
         self.segmenter = Segmenter.from_settings(settings)
-        self.stats = LatencyStats()
+        # 传入共享的统计对象时，跨会话累计（会话过期后仍保留，供 /status 与 NFR-01 报告使用）
+        self.stats = stats if stats is not None else LatencyStats()
 
         self.sentence_id = 0
         self.paused = True  # 收到 config 且 start 后才会处理音频
         self.blocked = False  # ASR 连续失败后置位
         self._audio_origin_ms: int | None = None
         self._consecutive_asr_fail = 0
+        self._last_lost = 0  # 已计入共享统计的丢帧数（避免 buffer 重置导致重复计数）
         # 音频位置 → 该帧到达墙钟时刻的有序表，用于按真实到达时间计算端到端延迟
         # （NFR-01 判据：句末 → 字幕上屏）。直接用「首帧时间 + 标称音频位置」会被
         # 客户端的发送漂移污染，故记录每帧实际到达时刻。
@@ -113,6 +117,7 @@ class Session:
         # 变更配置后重置管道，避免旧半句混入新会话
         self.segmenter.reset()
         self.buffer.reset()
+        self._last_lost = 0
         self.paused = True
 
     # ---- 音频 ---------------------------------------------------------
@@ -124,7 +129,15 @@ class Session:
         # 03 §2：未收到 config 或未 start 时不处理音频
         if self.config is None or self.paused:
             return
-        frame = self.buffer.accept(data)  # 非法帧抛 ProtocolError，由接入层处理
+        try:
+            frame = self.buffer.accept(data)  # 非法帧抛 ProtocolError，由接入层处理
+        except ProtocolError:
+            self.stats.invalid_frames += 1
+            raise
+        delta_lost = self.buffer.lost - self._last_lost
+        if delta_lost > 0:
+            self.stats.lost_frames += delta_lost
+        self._last_lost = self.buffer.lost
         self._recv_ms += protocol.CHUNK_MS
         self._recv_marks.append((self._recv_ms, now_ms()))
         if self._audio_origin_ms is None:
