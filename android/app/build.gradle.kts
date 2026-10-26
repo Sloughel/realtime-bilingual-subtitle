@@ -11,8 +11,8 @@ android {
         applicationId = "com.sloughel.bilingualsubtitle"
         minSdk = 29          // Android 10：媒体声音捕获（AudioPlaybackCapture）的硬性要求
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 6
+        versionName = "0.1.5"
     }
 
     buildTypes {

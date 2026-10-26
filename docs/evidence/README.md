@@ -10,6 +10,9 @@
 | `m3_monitor.csv` | M3 真机期间 RSS/GPU 采样（20:15:49–20:27:05，10s 间隔） | `scripts/monitor_server.py` |
 | `m5_soak_monitor.csv` | NFR-04 30 分钟满载期间 RSS/GPU 采样（8010 实例，10s 间隔） | `scripts/monitor_server.py --port 8010` |
 | `m5_soak_summary.md` | NFR-04 采样汇总（时长、轮次、句数、RSS/GPU 区间、错误） | 由 `m5_soak_monitor.csv` 与 `m5_soak_client.log` 分析生成 |
+| `20min_media_status.json` / `20min_media_latency.json` | 2026-10-26 20 分钟媒体模式诊断的 `/status` 与逐句记录 | 真机测试后保存 |
+| `20min_media_monitor.csv` | 上述诊断期间 RSS/GPU 采样（11.5 分钟，非完整 20 分钟） | `scripts/monitor_server.py` |
+| `20min_media_summary.md` | 诊断汇总：154 句、raw P95 5236ms、剔除 9 条离群后 2523ms、媒体重连缺陷定位 | 分析生成 |
 
 说明：
 

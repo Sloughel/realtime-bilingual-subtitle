@@ -374,9 +374,14 @@ class CaptureService : Service(), WsClient.Listener {
     override fun onConnection(state: ConnectionState, detail: String) {
         AppState.setConnection(state, detail)
         when (state) {
-            ConnectionState.CONNECTED -> startAudio()
-            // 重连中暂停音频源，但保留服务与“停止”按钮；重连成功后自动恢复
-            ConnectionState.RECONNECTING -> stopAudio()
+            // 首次连接或麦克风模式重连后启动/恢复音频源；已在采集时保持不动
+            ConnectionState.CONNECTED -> {
+                if (source == null) startAudio() else AppState.log("连接恢复，继续发送音频")
+            }
+            // 重连中不要停止音频源：媒体模式下 MediaProjection 只允许创建一个
+            // VirtualDisplay，释放后重建会失败并被 fail() 关闭连接。WsClient 在
+            // 未收到 config_ack 时会丢弃音频帧，恢复后同一音源继续发送。
+            ConnectionState.RECONNECTING -> AppState.log("连接中断，正在重连（采集保持）")
             ConnectionState.DISCONNECTED, ConnectionState.FAILED -> {
                 stopAudio()
                 AppState.setCapturing(false)
