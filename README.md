@@ -83,7 +83,7 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 (cd server && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000)
 #   状态接口：GET /health、GET /status
 
-# 单元 / 集成测试（50 项）
+# 单元 / 集成测试（54 项）
 (cd server && ../.venv/Scripts/python.exe -m pytest -q)
 
 # 端到端自测：离线音频 → 真实识别 + 翻译 → 校验字幕 JSON，输出延迟报告
@@ -105,6 +105,32 @@ M3 真机最终数据（83 句，Redmi Pad SE）：端到端 **P50 1886ms / P95 
 ASR P95 1076ms、翻译 P95 1106ms，满足 NFR-01；GPU 加载后 2566MB、RSS 610~690MB；
 断网自动重连与 30 分钟满载采样均通过。完整数据与偏差清单见
 [`docs/07-课程报告.md`](docs/07-课程报告.md) §5。
+
+### 查看字幕历史（可选）
+
+默认**不保存**逐句字幕。需要回看/分析时，在 `server/.env` 开启：
+
+```ini
+SUBTITLE_HISTORY=true
+SUBTITLE_HISTORY_PATH=logs/subtitles.jsonl
+```
+
+重启服务端后，每句字幕追加一行 JSON，包含时间、会话、句子序号、采集模式、原文、译文、
+各阶段耗时与翻译降级标记。文件已被 `.gitignore` 排除；**原文/译文属于用户数据，不需要时
+请设回 `false`**。
+
+```bash
+# 最近 20 条（默认）
+.venv/Scripts/python.exe scripts/show_history.py
+
+# 全部 / 按会话过滤 / 原始 JSON
+.venv/Scripts/python.exe scripts/show_history.py --tail 0
+.venv/Scripts/python.exe scripts/show_history.py --session d2ff
+.venv/Scripts/python.exe scripts/show_history.py --json
+```
+
+> 字幕历史与 `/latency` 不同：`/latency` 只保留最近 500 条的耗时指标（无文本），
+> 服务端重启即清空；JSONL 是持久化的原文/译文记录，适合复盘与演示。
 
 ### 跨网络连接（ZeroTier）
 
@@ -231,12 +257,12 @@ diff /tmp/regenerated.md docs/AI协作记录.md   # 时间戳/哈希段会不同
 bilingual-subtitle/
 ├── docs/          # 设计文档（01~06）、课程报告与演示脚本（07/08）、证据快照（evidence/）、AI 协作记录
 ├── server/        # Python 服务端（M1 已实现）
-│   ├── app/       # main / settings / protocol / dll / buffer / segmenter / asr / translate / session / connection / telemetry
-│   ├── tests/     # 50 项单元与集成测试；fixtures 内含测试音频与语料
+│   ├── app/       # main / settings / protocol / dll / buffer / segmenter / asr / translate / session / connection / telemetry / history
+│   ├── tests/     # 54 项单元与集成测试；fixtures 内含测试音频与语料
 │   ├── .env.example
 │   └── requirements.txt
 ├── android/       # Android 客户端（M2 已实现）：Gradle/Kotlin/Compose，见 android/README.md
-├── scripts/       # 环境自检、ASR/翻译验证、模拟客户端、端到端测试、WER 与翻译抽检
+├── scripts/       # 环境自检、ASR/翻译验证、模拟客户端、端到端测试、WER/翻译抽检、字幕历史查看
 ├── LICENSE        # MIT 开源协议
 └── README.md
 ```

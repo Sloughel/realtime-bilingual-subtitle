@@ -9,6 +9,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from . import protocol
 from .asr import ASREngine
+from .history import SubtitleHistory
 from .protocol import (
     INVALID_FRAME_LIMIT,
     PROTOCOL_VERSION,
@@ -54,6 +55,10 @@ class SessionRegistry:
         self._detached_since: dict[str, int] = {}
         # 跨会话累计的延迟/错误统计：会话过期回收后仍保留，供 /status 与 NFR-01 报告使用
         self.latency = LatencyStats()
+        # 可选字幕历史（默认关闭；见 settings.subtitle_history）
+        self.history = SubtitleHistory(
+            settings.subtitle_history_file, settings.subtitle_history
+        )
 
     # ------------------------------------------------------------------
     def get_or_create(self, session_id: str) -> tuple[Session, bool]:
@@ -73,6 +78,7 @@ class SessionRegistry:
                 self.asr,
                 self.translation,
                 stats=self.latency,
+                history=self.history,
             )
             self._sessions[session_id] = session
             log.info("新建会话：%s", session_id)

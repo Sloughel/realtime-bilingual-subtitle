@@ -22,6 +22,7 @@ import numpy as np
 from . import protocol
 from .asr import ASREngine, ModelUnavailableError
 from .buffer import AudioBuffer
+from .history import SubtitleHistory
 from .protocol import ProtocolError
 from .segmenter import Segment, Segmenter
 from .settings import Settings
@@ -46,11 +47,13 @@ class Session:
         asr: ASREngine,
         translation: TranslationService,
         stats: LatencyStats | None = None,
+        history: SubtitleHistory | None = None,
     ) -> None:
         self.session_id = session_id
         self.settings = settings
         self.asr = asr
         self.translation = translation
+        self.history = history
 
         self.config: dict | None = None
         self.buffer = AudioBuffer()
@@ -311,6 +314,32 @@ class Session:
             translate_attempts=outcome.attempts,
         )
         self.stats.add(record)
+
+        # 字幕历史是旁路功能：写失败不影响回传（history.append 内部吞掉异常）
+        if self.history is not None:
+            await self.history.append(
+                {
+                    "session_id": self.session_id,
+                    "sentence_id": sid,
+                    "mode": self.config.get("mode"),
+                    "src_lang": src,
+                    "tgt_lang": tgt,
+                    "source": source,
+                    "translation": outcome.text,
+                    "translation_degraded": outcome.degraded,
+                    "seq_start": seg.seq_start,
+                    "seq_end": seg.seq_end,
+                    "start_ms": seg.start_ms,
+                    "end_ms": seg.end_ms,
+                    "audio_ms": seg.duration_ms,
+                    "queue_wait_ms": queue_wait,
+                    "asr_ms": asr_ms,
+                    "translate_ms": outcome.elapsed_ms,
+                    "total_ms": total_ms,
+                    "created_ms": created_ms,
+                    "translate_attempts": outcome.attempts,
+                }
+            )
 
         await self._send_msg(
             protocol.subtitle(

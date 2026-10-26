@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -115,6 +117,45 @@ def test_websocket_full_flow(app, fixture_pcm16):
             assert s["end_ms"] > s["start_ms"] >= 0
             assert s["asr_ms"] >= 0 and s["translate_ms"] >= 0
             assert "created_ms" in s
+
+
+def test_subtitle_history_written(settings, fixture_pcm16, tmp_path):
+    """开启 SUBTITLE_HISTORY 后，每句字幕应追加到 JSONL（含原文/译文/模式）。"""
+    settings = settings.model_copy(
+        update={
+            "subtitle_history": True,
+            "subtitle_history_path": str(tmp_path / "subs.jsonl"),
+        }
+    )
+    asr = StubASR()
+    service = TranslationService(StubTranslator(), settings)
+    app = create_app(settings, asr=asr, translation=service, load_model=False)
+    frames = make_frames(one_sentence_audio(fixture_pcm16))
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws?protocol_version=1&session_id=t-history") as ws:
+            assert ws.receive_json()["type"] == "hello"
+            ws.send_json({"type": "config", "mode": "mic", "src_lang": "en", "tgt_lang": "zh"})
+            assert ws.receive_json()["type"] == "config_ack"
+            ws.send_json({"type": "start"})
+            for frame in frames:
+                ws.send_bytes(frame)
+            ws.send_json({"type": "stop"})
+            msgs = drain_until(ws, "subtitle")
+            assert [m for m in msgs if m.get("type") == "subtitle"]
+
+    path = tmp_path / "subs.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) >= 1
+    rec = json.loads(lines[0])
+    assert rec["session_id"] == "t-history"
+    assert rec["mode"] == "mic"
+    assert rec["src_lang"] == "en" and rec["tgt_lang"] == "zh"
+    assert rec["source"].startswith("stub sentence")
+    assert rec["translation"].startswith("译文:")
+    assert rec["translation_degraded"] is False
+    assert rec["total_ms"] >= 0
+    assert "ts" in rec
 
 
 def test_status_endpoint_aggregates_latency(app, fixture_pcm16):

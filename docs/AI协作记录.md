@@ -6,7 +6,7 @@
 > 轮转前的旧日志已被清理。本文件保留 10-12 生成的 **20 轮逐字记录**（下方正文，头部统计
 > 仅对应这 20 轮），并在**文末**补充「M1~M5 阶段补记」与「M5 收尾日志摘要」。补记依据
 > 会话摘要中的用户提示词、项目文档与 git 提交，**不是逐字转录**；M5 摘要来自轮转后的
-> 新日志（2026-10-19 20:37–21:05），保留助手正文与工具调用摘要。详见文末说明。
+> 新日志（2026-10-19 20:37–21:05），保留助手正文与工具调用摘要；10-26 的两轮逐字摘录见文末 §5。详见文末说明。
 >
 > **一、数据来源与校验**
 >
@@ -2297,3 +2297,188 @@ README 的状态表是准确的。加指引并更新目录说明：
   单文件 64 MB 上限导致的工具限制。报告与交接文档保留了这些工作的结果与关键决策。
 - **隐私**：本记录不含 API 密钥；密钥只存在于 `server/.env`（已 gitignore），脚本只报告
   「已配置/长度」，不打印内容。
+
+---
+
+## 5 轮转后日志摘录（2026-10-26，逐字）
+
+> 来源：轮转后的同一会话日志（24.5 MB / 162 行，SHA256 `5c09dbd1…`），
+> 时间范围 2026-10-19 20:37 ~ 2026-10-26 18:48，自动导出 **2 轮**：
+> 用户提示词 2 条、助手回复 17 段、工具调用 264 次。以下为逐字摘录，
+> 用于补足「怎么看翻译历史」与「做服务端 JSONL」两轮；不是补记，不含推测内容。
+
+### 轮次索引
+
+| 轮次 | 时间 | 用户提示词（摘要） |
+|---|---|---|
+| 1 | 10-26 18:43 | 怎么看翻译的历史记录？ |
+| 2 | 10-26 18:45 | 做服务端jsonl |
+
+### 轮 01　2026-10-26 18:43:29
+
+### 👤 用户提示词
+
+怎么看翻译的历史记录？
+
+### 🤖 助手回复
+
+我先确认项目里“翻译记录”实际存在哪几处：运行时 `/latency`、评估输出、评审表，以及 App 里显示的范围，再给你准确的查看方式。
+
+### 🔧 工具调用（6 次）
+
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "logger\|log\.\|source\|translation…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && ls -lh logs/translation_eval.* docs/06-NFR0…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "lastSource\|lastTranslation\|sente…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '300,355p' server/app/session.py && …
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && curl -s http://127.0.0.1:8000/latency | pyt…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -rn "log(" android/app/src/main/java/c…
+
+### 🤖 助手回复
+
+目前系统**没有保存“逐句翻译历史”**：字幕只在服务端处理完后回传给手机显示，既不落库也不写文件；服务端日志和 `/latency` 只记录耗时与字数，**不记录原文/译文**。所以现在能查的是下面三类。
+
+### 1. 想看成批的“原文→译文”：翻译评审表
+
+这是唯一保存了 100 句原文+译文的地方：
+
+- **已提交版**：[docs/06-NFR03-翻译评审记录.md](C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/docs/06-NFR03-翻译评审记录.md)
+  100 行表格，含原文、译文、评审列，可直接在 GitHub/编辑器查看。
+- **本机生成版**：`logs/translation_eval.md` 和 `logs/translation_eval.json`
+  由 `scripts/eval_translation.py` 生成，包含译文、延迟、token；`logs/` 已被 gitignore。
+
+重新生成（会真实调用 API，100 句约 0.026 元）：
+
+```bash
+.venv/Scripts/python.exe scripts/eval_translation.py
+```
+
+### 2. 想看“这次运行每句翻得慢不慢”：`/latency`
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8000/latency
+http://127.0.0.1:8000/status
+```
+
+`/latency` 保留最近 500 条记录，字段是 `sentence_id / asr_ms / translate_ms / total_ms / 字数 / session_id / 重试次数`，**没有文本**；`/status` 是跨会话累计的分位与成本汇总。服务端重启后 `/latency` 会清空。
+
+### 3. 手机 App 里：只看得到“最近一句”
+
+控制页「状态」卡显示最近一句原文/译文和「已收到 N 句」；「日志」是 20 条事件（启动、切换、错误），不含翻译文本。悬浮窗也只显示当前句。
+
+---
+
+如果你要的是“运行过程中能回看最近几十句”，需要新增一个历史功能。最小实现有两种，我建议按用途选：
+
+| 方案 | 改动 | 优点 | 注意 |
+|---|---|---|---|
+| **App 端历史** | `AppState` 保留最近 50 条 subtitle，控制页加「历史字幕」列表，可清空/导出 | 内容只留在手机，符合隐私定位；演示时能回看 | 退出 App 后默认不保留（除非存 DataStore） |
+| **服务端 JSONL** | 每句追加到 `logs/subtitles.jsonl`（session_id、sentence_id、原文、译文、耗时） | 便于报告统计与排查；一行一条 | 会把文本写到主机，建议配置开关默认关闭 |
+| 两者都做 | App 查看 + 服务端可选落盘 | 演示与分析都方便 | 改动稍多，客户端要升 v0.1.5 |
+
+如果只是课程报告/答辩需要证据，现有的 `docs/06` 和 `/latency` 已经够用；如果演示时想现场翻看刚才的几句，建议做 **App 端历史**。需要的话告诉我选哪个，我直接实现并出新版 APK。
+
+### 轮 02　2026-10-26 18:45:21
+
+### 👤 用户提示词
+
+做服务端jsonl
+
+### 🤖 助手回复
+
+做服务端 JSONL：每句字幕追加一行，包含会话、句子、原文、译文、耗时与降级标记；用配置开关控制，默认开启，并补测试与文档。先看会话/注册表的现有注入方式，按同样风格实现。
+
+### 🔧 工具调用（6 次）
+
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '1,90p' server/app/session.py && ech…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '1,120p' server/app/main.py && echo …
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '210,345p' server/app/session.py
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '1,80p' server/tests/test_registry.p…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '1,120p' server/tests/test_ws_e2e.py
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -rn "async def test" server/tests | he…
+
+### 🤖 助手回复
+
+方案确定：服务端每句字幕追加到 `logs/subtitles.jsonl`，配置开关 `SUBTITLE_HISTORY`（代码默认关闭，你的本地 `.env` 开启），并加一个 `scripts/show_history.py` 方便按表格查看最近记录。
+
+### 🔧 工具调用（63 次）
+
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '45,105p' server/app/settings.py
+- `TodoWrite` (todos)
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\app\settings.py
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\app\settings.py
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\app\settings.py
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\app\settings.py
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\app\settings.py
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "def parse_config" -A 45 server/app…
+- `Write` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\app\history.py
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path p=…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path p=…
+- `Write` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\tests\test_history.py
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path p=…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/server" && ../.venv/Scripts/python.exe -m pytes…
+- `Write` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\scripts\show_history.py
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && tail -25 server/.env.example
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\.env.example
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\.env.example
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\server\.env.example
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path p=…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path p=…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -rn "50 项\|50 项测试\|50 passed" README.m…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path fo…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && sed -n '238,255p' docs/03-接口与通信协议设计.md && e…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && tail -6 docs/03-接口与通信协议设计.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\README.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\README.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\03-接口与通信协议设计.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "^## 4. 测试策略\|^## 5\|^## 6" docs/04…
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\04-开发计划与任务分解.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\04-开发计划与任务分解.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && tail -3 docs/04-开发计划与任务分解.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path p=…
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "#### 4.2.4\|### 4.3\|### 5.2" docs…
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\07-课程报告.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\07-课程报告.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "scripts/show_history\|scripts/moni…
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\07-课程报告.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\07-课程报告.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\07-课程报告.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "### 4.7\|^---$\|## 5 失败预案\|## 7 演示…
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\08-演示与答辩脚本.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\08-演示与答辩脚本.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\08-演示与答辩脚本.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\08-演示与答辩脚本.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\README.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Read` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\README.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\README.md
+- `Edit` C:\Users\38915\.zcode\workspace\default\bilingual-subtitle\docs\05-项目状态与交接说明.md
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -rn "50 项\|50 passed\|53 项\|54 项" READ…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && .venv/Scripts/python.exe scripts/check_docs…
+
+### 🤖 助手回复
+
+代码与 54 项测试已通过。再做一次真实链路冒烟：临时 8010 实例开启历史，跑一轮真实识别+翻译，确认 JSONL 与查看脚本都正常。
+
+### 🔧 工具调用（8 次）
+
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle/server" && SERVER_PORT=8010 SERVER_HOST=127.0.0…
+- `Bash` sleep 12; curl -s --max-time 3 http://127.0.0.1:8010/health; echo; cd "C:/Users/38915/.zcode/workspace/default…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && ls -lh logs/subtitles_smoke.jsonl && echo "…
+- `TaskStop` (task_id)
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && rm -f logs/subtitles_smoke.jsonl && sleep 2…
+- `Bash` curl -s --max-time 3 http://127.0.0.1:8000/health; echo; netstat -ano | grep ":8000" | head -3; powershell -No…
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && python - <<'PY' from pathlib import Path # …
+- `Bash` cd "C:/Users/38915/.zcode/workspace/default/bilingual-subtitle" && grep -n "M5 后续增强\|v1.21" docs/04-开发计划与任务分解.…

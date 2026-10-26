@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     session_ttl_s: int = 30
     max_queue: int = 10
 
+    # ---------- 字幕历史（可选，本地 JSONL）----------
+    # 开启后每句字幕写入 SUBTITLE_HISTORY_PATH（含原文/译文，文件已被 .gitignore 排除）。
+    # 默认关闭：字幕内容属于用户数据，是否落盘由部署者决定（NFR-11）。
+    subtitle_history: bool = False
+    subtitle_history_path: str = "logs/subtitles.jsonl"
+
     # ---------- 成本监控（FR-21 / NFR-10）----------
     cost_notify_yuan: float = 10.0
     cost_notify_tokens: int = 1_000_000_000
@@ -96,6 +102,12 @@ class Settings(BaseSettings):
             return str(candidate)
         return self.whisper_model
 
+    @property
+    def subtitle_history_file(self) -> Path:
+        """字幕历史文件路径；相对路径按项目根目录解析。"""
+        path = Path(self.subtitle_history_path).expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
     def runtime_warnings(self) -> list[str]:
         """返回不影响启动、但部署者应知晓的配置提示。"""
         warnings: list[str] = []
@@ -110,6 +122,11 @@ class Settings(BaseSettings):
         if self.whisper_device == "cpu":
             warnings.append(
                 "WHISPER_DEVICE=cpu：延迟可能不满足 NFR-01 的 800ms/句预算。"
+            )
+        if self.subtitle_history:
+            warnings.append(
+                f"SUBTITLE_HISTORY=true：原文与译文将写入 {self.subtitle_history_file}"
+                "（本地文件，已 gitignore；不需要时设为 false）。"
             )
         return warnings
 
