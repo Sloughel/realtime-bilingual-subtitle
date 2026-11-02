@@ -13,6 +13,10 @@
 | `20min_media_status.json` / `20min_media_latency.json` | 2026-10-26 20 分钟媒体模式诊断的 `/status` 与逐句记录 | 真机测试后保存 |
 | `20min_media_monitor.csv` | 上述诊断期间 RSS/GPU 采样（11.5 分钟，非完整 20 分钟） | `scripts/monitor_server.py` |
 | `20min_media_summary.md` | 诊断汇总：154 句、raw P95 5236ms、剔除 9 条离群后 2523ms、媒体重连缺陷定位 | 分析生成 |
+| `clean30_status.json` / `clean30_latency.json` | 2026-11-02 干净 30 分钟复测：282 句、P95 2471.4ms | 真机测试后保存 |
+| `clean30_monitor.csv` | 干净复测期间 RSS/GPU 采样（194 个有效样本） | `scripts/monitor_server.py` |
+| `clean30_phone_mem.csv` | 平板 PSS/RSS 采样（33 个样本，PSS +5.2MB） | `adb shell dumpsys meminfo` |
+| `clean30_summary.md` | 干净复测汇总：NFR-01/04/05 与媒体重连复测 | 分析生成 |
 
 说明：
 
