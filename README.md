@@ -12,7 +12,7 @@
 | M1 | 服务端全链路（协议 + 断句 + ASR + 翻译） | **已完成并实测通过** |
 | M2 | Android 客户端（双采集模式 + 悬浮窗） | **已完成（Redmi Pad SE 真机验证）** |
 | M3 | 端到端联调 | **已完成（Redmi Pad SE；2026-11-02 华为 MatePad 复测 282 句 P95 2471.4ms）** |
-| M4 | 扩展（互联网 / 本地模型 / Linux / iOS·鸿蒙） | 未开始（可选，见扩展路线） |
+| M4 | 扩展（互联网 / 本地模型 / Linux / iOS·鸿蒙） | **E1/E2/E3 已实施**，E4 仅调研（见 [`docs/10`](docs/10-M4扩展实施记录.md)） |
 | M5 | 报告与演示 | **已完成：课程报告、演示脚本、仓库整理** |
 
 课程报告与演示材料：[`docs/07-课程报告.md`](docs/07-课程报告.md)（完整研制报告）、
@@ -83,7 +83,7 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 (cd server && ../.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000)
 #   状态接口：GET /health、GET /status
 
-# 单元 / 集成测试（54 项）
+# 单元 / 集成测试（75 项）
 (cd server && ../.venv/Scripts/python.exe -m pytest -q)
 
 # 端到端自测：离线音频 → 真实识别 + 翻译 → 校验字幕 JSON，输出延迟报告
@@ -91,6 +91,8 @@ cp server/.env.example server/.env    # 然后填入 TRANSLATE_API_KEY
 
 # 不用 Android 客户端也能验证：向已启动的服务端灌入离线音频
 .venv/Scripts/python.exe scripts/mock_client.py --wav server/tests/fixtures/sample_en.wav --realtime
+# 服务端开了鉴权 / TLS 时（E1）：加 --token 与 --tls
+.venv/Scripts/python.exe scripts/mock_client.py --tls --token <AUTH_TOKEN> --fast
 
 # NFR-03 判据工具：ASR 词错率（WER） 与 翻译质量抽检（含人工评审表）
 .venv/Scripts/python.exe scripts/eval_asr_wer.py
@@ -163,6 +165,67 @@ SUBTITLE_HISTORY_PATH=logs/subtitles.jsonl
 
 > 热点网段（如 `192.168.43.x` / `192.168.49.x`）由手机分配，换热点后地址可能变化，
 > 重新执行第 2 步确认即可。
+
+## M4 扩展（E1 公网鉴权 / E2 本地模型 / E3 Linux）
+
+三项扩展均已实施，**不改动协议消息类型**，基础版的用法与数据通路保持不变
+（未配置时行为与 M1~M3 完全一致）。设计取舍、验证证据与未验证项见
+[`docs/10-M4扩展实施记录.md`](docs/10-M4扩展实施记录.md)；二次开发写法见
+[`docs/09-扩展点与二次开发指南.md`](docs/09-扩展点与二次开发指南.md)。
+
+### E1 跨网络 / 公网：令牌鉴权 + wss
+
+```ini
+# server/.env
+AUTH_TOKEN=<随机串>                 # 非空即启用；留空 = 不鉴权（仅限可信局域网）
+SSL_CERTFILE=certs/dev-cert.pem    # 可选：服务端直出 wss
+SSL_KEYFILE=certs/dev-key.pem
+```
+
+```bash
+python -c "import secrets;print(secrets.token_urlsafe(24))"   # 生成令牌
+.venv/bin/python scripts/gen_dev_cert.py --ip 192.168.1.10     # 自签证书（仅调试）
+```
+
+- 客户端连接串：`wss://<host>:8000/ws?protocol_version=1&session_id=<uuid>&token=<令牌>`；
+  也可用请求头 `Authorization: Bearer <令牌>`。Android 控制页已提供「访问令牌」输入框与
+  「wss」开关。
+- 令牌错误/缺失：服务端回 `error(1003)` 并以 **4401** 关闭，**不分配会话、不做任何识别**；
+  客户端收到 4401 会停止自动重连并提示检查令牌。
+- 公网部署推荐由 frp/nginx 终结 TLS（服务端只填 `AUTH_TOKEN`），配置片段见 09 文档 §5.3。
+  **不要**把明文 `ws://` 直接暴露到公网。
+
+### E2 本地模型翻译（数据不出内网）
+
+```bash
+ollama serve & ollama pull qwen2.5:7b-instruct
+# server/.env
+#   TRANSLATE_BACKEND=ollama
+#   OLLAMA_BASE_URL=http://127.0.0.1:11434
+#   OLLAMA_MODEL=qwen2.5:7b-instruct      # 此时不需要 TRANSLATE_API_KEY
+.venv/bin/python scripts/verify_ollama.py   # 可达性 → 模型是否已 pull → 三句真实翻译
+```
+
+价值是**隐私**：音频与文本都不出内网（NFR-11），`/status` 中 `cost_yuan` 恒为 0 但 token
+用量照常统计。代价是延迟——本地模型明显慢于云端，**NFR-01 的 800/1500ms 预算按云端后端设定**，
+引用本地数据时必须重新实测，不能沿用 M3 的 P95 2475ms。
+
+### E3 Linux 主机
+
+```bash
+python3 -m venv .venv && .venv/bin/python -m pip install -r server/requirements.txt
+cp server/.env.example server/.env
+./start_server.sh          # 端口预检 + 打印手机端应填 IP（等价于 start_server.bat）
+./stop_server.sh           # 只结束监听该端口的 Python 进程
+
+# 常驻
+sudo cp deploy/bilingual-subtitle.service /etc/systemd/system/
+sudo systemctl enable --now bilingual-subtitle && journalctl -u bilingual-subtitle -f
+```
+
+已在 Ubuntu + Python 3.13 上跑通全量测试（75 项）。**注意**：PyAV ≥14 移除了
+`metadata_errors` 参数，会让 `faster-whisper` 的 `decode_audio()` 报 `TypeError`，
+请使用 `av==13.1.0`（`server/requirements.txt` 已限制 `av>=12,<14` 并附说明）。
 
 ## 构建 Android 客户端（M2）
 
@@ -256,14 +319,18 @@ diff /tmp/regenerated.md docs/AI协作记录.md   # 时间戳/哈希段会不同
 
 ```
 bilingual-subtitle/
-├── docs/          # 设计文档（01~06）、课程报告与演示脚本（07/08）、证据快照（evidence/）、AI 协作记录
-├── server/        # Python 服务端（M1 已实现）
+├── docs/          # 设计文档（01~06）、课程报告与演示脚本（07/08）、扩展点指南与 M4 记录（09/10）、证据快照（evidence/）、AI 协作记录
+├── server/        # Python 服务端（M1 已实现；M4 增加本地模型后端与鉴权）
 │   ├── app/       # main / settings / protocol / dll / buffer / segmenter / asr / translate / session / connection / telemetry / history
-│   ├── tests/     # 54 项单元与集成测试；fixtures 内含测试音频与语料
+│   ├── tests/     # 75 项单元与集成测试；fixtures 内含测试音频与语料
 │   ├── .env.example
 │   └── requirements.txt
 ├── android/       # Android 客户端（M2 已实现）：Gradle/Kotlin/Compose，见 android/README.md
-├── scripts/       # 环境自检、ASR/翻译验证、模拟客户端、端到端测试、WER/翻译抽检、字幕历史查看
+├── deploy/        # systemd 单元模板（E3 Linux 常驻）
+├── scripts/       # 环境自检、ASR/翻译/Ollama 验证、模拟客户端、端到端测试、WER/翻译抽检、字幕历史、证书生成
+├── start_server.sh / stop_server.sh   # Linux / macOS 启动与停止（等价于 .bat）
+├── start_server.bat / stop_server.bat # Windows 启动与停止
+├── CONTRIBUTING.md                    # 贡献指南（环境、自查清单、代码约定、隐私红线）
 ├── LICENSE        # MIT 开源协议
 └── README.md
 ```

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -40,9 +41,14 @@ def main() -> int:
         print()
         print("可能上次启动的服务端仍在运行。可选处理：")
         print("  1) 直接使用它：浏览器打开 http://<本机IP>:%d/health 验证" % port)
-        print("  2) 停止它：双击 stop_server.bat（仅会结束占用端口的 Python 进程）")
-        if owner:
-            print(f"     或手动：taskkill /PID {owner[0]} /F")
+        if os.name == "nt":
+            print("  2) 停止它：双击 stop_server.bat（仅会结束占用端口的 Python 进程）")
+            if owner:
+                print(f"     或手动：taskkill /PID {owner[0]} /F")
+        else:
+            print("  2) 停止它：./stop_server.sh（仅会结束占用端口的 Python 进程）")
+            if owner:
+                print(f"     或手动：kill {owner[0]}")
         print(f"  3) 换端口：在 server/.env 设置 SERVER_PORT=8001 后重试")
         print("=" * 66)
         return 2
@@ -66,10 +72,25 @@ def main() -> int:
     )
     print("             并以管理员身份运行 allow_firewall.bat 放行 8000/TCP（仅 ZeroTier 网段）。")
     print(f"识别设备   : {settings.whisper_device} / {settings.whisper_compute_type}")
-    print(
-        f"翻译后端   : {settings.translate_base_url} / {settings.translate_model} "
-        f"({'已配置密钥' if settings.translate_configured else '未配置，将降级为原文'})"
-    )
+    if settings.translate_is_local:
+        print(
+            f"翻译后端   : 本地 Ollama（{settings.ollama_model} @ {settings.ollama_base_url}）"
+            "  —— 音频与文本不出内网（E2）"
+        )
+    else:
+        print(
+            f"翻译后端   : {settings.translate_base_url} / {settings.translate_model} "
+            f"({'已配置密钥' if settings.translate_configured else '未配置，将降级为原文'})"
+        )
+    if settings.auth_required:
+        print(
+            f"接入鉴权   : 已启用（{settings.scheme}），客户端需带 ?token=… 或 "
+            "Authorization: Bearer …"
+        )
+        if not settings.tls_enabled:
+            print("             提示：未配置 TLS 证书，跨公网请由 frp/nginx 终结 wss。")
+    else:
+        print("接入鉴权   : 关闭（仅建议用于可信局域网）")
     print("状态接口   : /health 、/status 、/latency（逐句明细）")
     print("首次启动需加载 whisper 模型（约 10~30 秒）…")
     print("按 Ctrl+C 停止。")
@@ -79,11 +100,19 @@ def main() -> int:
     print("提示：若手机连不上，请检查 Windows 防火墙是否放行 Python 的端口。")
     print()
 
+    ssl_kwargs = {}
+    if settings.tls_enabled:
+        # E1：服务端直接终结 TLS，客户端用 wss://（也可交给 frp/nginx 终结）
+        ssl_kwargs = {
+            "ssl_certfile": settings.ssl_certfile,
+            "ssl_keyfile": settings.ssl_keyfile,
+        }
     uvicorn.run(
         app,
         host=settings.server_host,
         port=port,
         log_level=settings.log_level.lower(),
+        **ssl_kwargs,
     )
     return 0
 

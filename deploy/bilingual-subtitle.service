@@ -1,0 +1,51 @@
+# 实时双语字幕服务端 systemd 单元（Linux，E3）
+#
+# 安装：
+#   sudo cp deploy/bilingual-subtitle.service /etc/systemd/system/
+#   sudoedit /etc/systemd/system/bilingual-subtitle.service   # 改 User / WorkingDirectory
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bilingual-subtitle
+#
+# 查看：
+#   systemctl status bilingual-subtitle
+#   journalctl -u bilingual-subtitle -f
+#   curl --noproxy '*' http://127.0.0.1:8000/health
+#
+# 说明：
+#   * 服务端是**长驻进程**，模型加载完成后常驻显存/内存，适合用 systemd 托管；
+#   * 读取 server/.env 获取全部配置，本文件不写任何密钥；
+#   * Whisper 首次运行会下载模型，需要外网；之后可离线运行。
+
+[Unit]
+Description=Realtime Bilingual Subtitle Server
+Documentation=file:///opt/bilingual-subtitle/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# ↓↓↓ 改成实际部署路径与运行用户 ↓↓↓
+WorkingDirectory=/opt/bilingual-subtitle
+User=bilingual
+Group=bilingual
+Environment=PYTHONUNBUFFERED=1
+# 国内网络下载模型时可改用镜像（仅首次需要）
+# Environment=HF_ENDPOINT=https://hf-mirror.com
+ExecStart=/opt/bilingual-subtitle/.venv/bin/python server/run_server.py
+Restart=on-failure
+RestartSec=5
+# 模型加载 10~30s，给足启动时间
+TimeoutStartSec=180
+# 退出时先发 SIGINT，让 FastAPI lifespan 正常关闭会话与 HTTP 客户端
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+# 基本加固：服务端只需要读写自己的目录
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/bilingual-subtitle/logs
+
+[Install]
+WantedBy=multi-user.target

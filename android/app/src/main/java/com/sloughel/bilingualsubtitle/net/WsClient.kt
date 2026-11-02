@@ -1,6 +1,7 @@
 package com.sloughel.bilingualsubtitle.net
 
 import android.util.Log
+import com.sloughel.bilingualsubtitle.AppState
 import com.sloughel.bilingualsubtitle.ConnectionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
+import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -61,7 +63,15 @@ class WsClient(
     fun connect() {
         if (closed) return
         listener.onConnection(ConnectionState.CONNECTING, "连接 $host:$port …")
-        val url = "ws://$host:$port/ws?protocol_version=${Protocol.PROTOCOL_VERSION}&session_id=$sessionId"
+        // E1：wss 与令牌都从 UI 状态读取，避免在 Intent/构造参数里层层透传。
+        // 令牌为空表示服务端未开启鉴权；有值时按 03 文档 §2 以 ?token= 传递。
+        val ui = AppState.state.value
+        val scheme = if (ui.useTls) "wss" else "ws"
+        val tokenParam = ui.authToken.trim().let {
+            if (it.isEmpty()) "" else "&token=" + URLEncoder.encode(it, "UTF-8")
+        }
+        val url = "$scheme://$host:$port/ws?protocol_version=${Protocol.PROTOCOL_VERSION}" +
+            "&session_id=$sessionId$tokenParam"
         val request = Request.Builder().url(url).build()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -86,6 +96,14 @@ class WsClient(
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 ready = false
                 if (closed) return
+                if (code == 4401) {
+                    // E1：鉴权失败重连没有意义，停下并提示用户检查令牌
+                    listener.onLog("连接关闭：4401 鉴权失败，已停止自动重连")
+                    listener.onServerError(1003, "令牌无效或缺失，请检查访问令牌")
+                    listener.onConnection(ConnectionState.FAILED, "鉴权失败：请检查访问令牌")
+                    closed = true
+                    return
+                }
                 listener.onLog("连接关闭：$code $reason")
                 scheduleReconnect()
             }

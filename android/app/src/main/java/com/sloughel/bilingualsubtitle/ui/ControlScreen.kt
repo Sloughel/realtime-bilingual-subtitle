@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sloughel.bilingualsubtitle.AppState
 import com.sloughel.bilingualsubtitle.BuildConfig
 import com.sloughel.bilingualsubtitle.CaptureMode
 import com.sloughel.bilingualsubtitle.UiState
@@ -92,8 +93,32 @@ fun ControlScreen(
                             modifier = Modifier.width(104.dp),
                         )
                     }
-                    Text("语言：英语 → 中文（v1.0）", style = MaterialTheme.typography.bodySmall)
-                }
+                    // E1：跨网络/公网接入需要令牌；wss 由服务端或隧道终结 TLS
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = state.authToken,
+                            onValueChange = { AppState.setAuthToken(it) },
+                            label = { Text("访问令牌（可选）") },
+                            singleLine = true,
+                            enabled = !state.capturing,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("wss", style = MaterialTheme.typography.bodySmall)
+                            Switch(
+                                checked = state.useTls,
+                                onCheckedChange = { AppState.setUseTls(it) },
+                                enabled = !state.capturing,
+                            )
+                        }
+                    }
+                    Text(
+                        "令牌留空 = 服务端未开启鉴权；wss 需服务端配置证书或经隧道终结 TLS",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text("语言：英语 → 中文（v1.0）", style = MaterialTheme.typography.bodySmall)                }
             }
 
             // ---------- 采集模式 ----------

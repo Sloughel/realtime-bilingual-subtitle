@@ -16,7 +16,7 @@ SERVER_DIR = Path(__file__).resolve().parent.parent  # …/server
 PROJECT_ROOT = SERVER_DIR.parent  # 仓库根
 ENV_FILE = SERVER_DIR / ".env"
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 PROTOCOL_VERSION = 1
 
 
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     vad_neg_threshold: float | None = None  # 留空则按 threshold-0.15 推导
     vad_pre_roll_ms: int = 200
 
+    # ---------- 翻译后端（E2：deepseek 云端 / ollama 本地）----------
+    translate_backend: str = "deepseek"
+
     # ---------- 翻译（OpenAI 兼容接口，默认 DeepSeek）----------
     translate_base_url: str = "https://api.deepseek.com"
     translate_api_key: str = ""
@@ -55,6 +58,19 @@ class Settings(BaseSettings):
     translate_timeout_s: float = 10.0
     translate_max_retry: int = 2
     translate_concurrency: int = 3
+
+    # ---------- 本地模型翻译（E2：Ollama，OpenAI 兼容端点）----------
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen2.5:7b-instruct"
+    # 本地模型首次调用要加载权重，给更宽的超时预算
+    ollama_timeout_s: float = 30.0
+
+    # ---------- 接入鉴权与传输（E1：跨网络/公网）----------
+    # 非空时，/ws 要求 ?token=… 或 Authorization: Bearer …；留空表示不鉴权（仅限可信局域网）
+    auth_token: str = ""
+    # 配置后由服务端直接终结 TLS（wss://）；只用 frp/nginx 终结时可留空
+    ssl_certfile: str = ""
+    ssl_keyfile: str = ""
 
     # ---------- 会话 ----------
     session_ttl_s: int = 30
@@ -84,11 +100,48 @@ class Settings(BaseSettings):
             return None
         return v
 
+    @field_validator("translate_backend", mode="before")
+    @classmethod
+    def _check_backend(cls, v: object) -> object:
+        value = str(v or "deepseek").strip().lower()
+        if value not in ("deepseek", "ollama"):
+            raise ValueError("TRANSLATE_BACKEND 只支持 deepseek / ollama")
+        return value
+
+    @property
+    def translate_is_local(self) -> bool:
+        """翻译后端是否为本地模型（E2：本地推理，无计费、数据不出内网）。"""
+        return self.translate_backend == "ollama"
+
+    @property
+    def translate_model_name(self) -> str:
+        """当前后端所用的模型名（/health 展示用，不含任何密钥）。"""
+        return self.ollama_model if self.translate_is_local else self.translate_model
+
     @property
     def translate_configured(self) -> bool:
-        """密钥是否已填写（不返回、不打印密钥本身）。"""
+        """翻译后端是否可用（不返回、不打印密钥本身）。
+
+        本地 Ollama 不需要密钥，只要选中该后端即视为可用；云端后端校验密钥是否已填。
+        """
+        if self.translate_is_local:
+            return True
         key = (self.translate_api_key or "").strip()
         return bool(key) and not key.startswith("sk-在此")
+
+    @property
+    def auth_required(self) -> bool:
+        """是否启用 /ws 鉴权（E1）。"""
+        return bool((self.auth_token or "").strip())
+
+    @property
+    def tls_enabled(self) -> bool:
+        """是否由服务端直接终结 TLS（wss）。"""
+        return bool(self.ssl_certfile.strip() and self.ssl_keyfile.strip())
+
+    @property
+    def scheme(self) -> str:
+        return "wss" if self.tls_enabled else "ws"
 
     @property
     def api_key_length(self) -> int:
@@ -114,6 +167,22 @@ class Settings(BaseSettings):
         if not self.translate_configured:
             warnings.append(
                 "TRANSLATE_API_KEY 未填写，翻译将直接降级回传原文（FM-02）。"
+            )
+        if self.translate_is_local:
+            warnings.append(
+                f"翻译后端为本地 Ollama（{self.ollama_model} @ {self.ollama_base_url}）："
+                "音频与文本均不出内网（E2），不产生 API 费用；"
+                "请确认 ollama 已启动且已 pull 该模型（scripts/verify_ollama.py 可自检）。"
+            )
+        if self.auth_required:
+            warnings.append(
+                "已启用 AUTH_TOKEN 鉴权：客户端连接 /ws 时必须带 ?token=… 或 "
+                "Authorization: Bearer …。令牌属于密钥，请勿写入仓库或日志。"
+            )
+        if self.auth_required and not self.tls_enabled:
+            warnings.append(
+                "已启用鉴权但未配置 TLS 证书：若要把端口暴露到公网，"
+                "请由 frp/nginx 终结 wss，或配置 SSL_CERTFILE/SSL_KEYFILE。"
             )
         if not (1 <= self.server_port <= 65535):
             warnings.append(f"SERVER_PORT={self.server_port} 超出合法范围。")

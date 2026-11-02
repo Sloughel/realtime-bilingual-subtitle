@@ -87,6 +87,7 @@ async def stream_audio(
     mode: str = "mic",
     idle_timeout_s: float = 6.0,
     on_subtitle=None,
+    ssl_ctx=None,
 ) -> dict:
     """连接服务端并灌入音频，返回 ``{subtitles, errors, status, track, elapsed_s}``。"""
     import websockets
@@ -98,7 +99,7 @@ async def stream_audio(
     frames = make_frames(pcm16)
 
     t0 = time.perf_counter()
-    async with websockets.connect(url, max_size=None) as ws:
+    async with websockets.connect(url, max_size=None, ssl=ssl_ctx) as ws:
         hello = json.loads(await ws.recv())
         await ws.send(json.dumps({"type": "config", "mode": mode, "src_lang": src, "tgt_lang": tgt}))
         ack = json.loads(await ws.recv())
@@ -142,7 +143,23 @@ async def _main_async(args) -> int:
     pcm = load_pcm16(args.wav)
     if args.limit_s:
         pcm = pcm[: int(args.limit_s * 16000)]
-    url = f"ws://{args.host}:{args.port}/ws?protocol_version=1"
+    from urllib.parse import quote
+
+    scheme = "wss" if args.tls else "ws"
+    query = "protocol_version=1"
+    if args.token:
+        # E1：令牌只出现在 URL 查询串里，不打印内容
+        query += "&token=" + quote(args.token, safe="")
+    url = f"{scheme}://{args.host}:{args.port}/ws?{query}"
+
+    ssl_ctx = None
+    if args.tls:
+        import ssl
+
+        ssl_ctx = ssl.create_default_context()
+        if not args.verify_tls:
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
 
     print("=" * 72)
     print("模拟客户端 → 服务端")
@@ -150,6 +167,9 @@ async def _main_async(args) -> int:
     print(f"服务端   : {url}")
     print(f"音频     : {args.wav}（{pcm.size / 16000:.1f}s）")
     print(f"节奏     : {'实时' if not args.fast else '全速'}   语言：{args.src} → {args.tgt}")
+    if args.tls:
+        print(f"传输     : wss（{'校验证书' if args.verify_tls else '不校验证书（自签调试）'}）")
+    print(f"鉴权     : {'已携带令牌' if args.token else '未携带令牌（服务端未开启 AUTH_TOKEN 时必须）'}")
     print("-" * 72)
 
     def show(msg: dict) -> None:
@@ -157,9 +177,28 @@ async def _main_async(args) -> int:
         print(f"           → {msg['translation']}"
               + ("   （翻译失败，已回传原文）" if msg.get("translation_degraded") else ""))
 
-    result = await stream_audio(
-        url, pcm, realtime=not args.fast, src=args.src, tgt=args.tgt, on_subtitle=show
-    )
+    try:
+        result = await stream_audio(
+            url,
+            pcm,
+            realtime=not args.fast,
+            src=args.src,
+            tgt=args.tgt,
+            on_subtitle=show,
+            ssl_ctx=ssl_ctx,
+        )
+    except Exception as exc:  # noqa: BLE001 - 鉴权失败/证书问题给出可操作提示
+        code = getattr(exc, "code", None)
+        reason = str(exc)
+        if code == 4401 or "4401" in reason:
+            print("[失败] 鉴权被拒（4401）：令牌缺失或不匹配。")
+            print("       → 用 --token <AUTH_TOKEN> 重试；服务端未开启鉴权时请不要带 --token。")
+        elif args.tls and "CERTIFICATE" in reason.upper():
+            print(f"[失败] TLS 证书校验失败：{reason[:160]}")
+            print("       → 自签证书请去掉 --verify-tls；真证书请确认域名与证书 SAN 一致。")
+        else:
+            print(f"[失败] 连接异常：{reason[:200]}")
+        return 1
 
     subs = result["subtitles"]
     print("-" * 72)
@@ -192,6 +231,13 @@ def main() -> int:
     ap.add_argument("--fast", action="store_true", help="不按实时节奏发送（更快）")
     ap.add_argument("--realtime", action="store_true", help="按实时节奏发送（默认）")
     ap.add_argument("--dump", default="", help="把结果 JSON 写到该路径")
+    ap.add_argument("--token", default="", help="E1：服务端开启 AUTH_TOKEN 时填写的访问令牌")
+    ap.add_argument("--tls", action="store_true", help="E1：用 wss:// 连接（默认不校验证书）")
+    ap.add_argument(
+        "--verify-tls",
+        action="store_true",
+        help="E1：wss 时校验服务端证书（自签证书会失败，仅在用真证书时加）",
+    )
     args = ap.parse_args()
     return asyncio.run(_main_async(args))
 

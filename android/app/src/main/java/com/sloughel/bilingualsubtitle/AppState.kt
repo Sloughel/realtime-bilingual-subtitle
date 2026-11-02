@@ -27,6 +27,10 @@ data class UiState(
     val mode: CaptureMode = CaptureMode.MIC,
     val host: String = "",
     val port: String = "8000",
+    /** E1：服务端开启鉴权时填写的访问令牌（明文随 URL 传给本机/内网服务端） */
+    val authToken: String = "",
+    /** E1：是否用 wss（TLS）连接，需服务端配置证书或由隧道终结 TLS */
+    val useTls: Boolean = false,
     val statusText: String = "未连接",
     val lastSource: String = "",
     val lastTranslation: String = "",
@@ -82,6 +86,16 @@ object AppState {
 
     fun setOverlayAlpha(alpha: Float) {
         update { it.copy(overlayAlpha = alpha.coerceIn(0.2f, 1f)) }
+    }
+
+    /** E1：访问令牌。仅影响下一次连接，已建立的连接不受影响。 */
+    fun setAuthToken(token: String) {
+        update { it.copy(authToken = token.trim()) }
+    }
+
+    /** E1：wss 开关。 */
+    fun setUseTls(enabled: Boolean) {
+        update { it.copy(useTls = enabled) }
     }
 
     /** 媒体声音实时电平（0~1），用于判断是否真的捕获到了声音。 */

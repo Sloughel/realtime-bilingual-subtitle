@@ -79,12 +79,18 @@ def create_app(
         app.state.reaper = reaper
 
         log.info(
-            "服务已就绪：%s:%d%s  设备=%s  翻译=%s",
+            "服务已就绪：%s:%d%s  设备=%s  翻译=%s  鉴权=%s  传输=%s",
             settings.server_host,
             settings.server_port,
             protocol.WS_PATH,
             getattr(engine, "device", "n/a"),
-            "已配置" if settings.translate_configured else "未配置（降级）",
+            (
+                f"{settings.translate_backend}:{settings.translate_model_name}"
+                if settings.translate_configured
+                else "未配置（降级）"
+            ),
+            "已启用" if settings.auth_required else "关闭",
+            settings.scheme,
         )
         try:
             yield
@@ -114,6 +120,10 @@ def create_app(
                 "protocol_version": protocol.PROTOCOL_VERSION,
                 "asr": engine.status() if engine is not None else {"device": "stub"},
                 "translate_configured": settings.translate_configured,
+                "translate_backend": settings.translate_backend,
+                "translate_model": settings.translate_model_name,
+                "auth_required": settings.auth_required,
+                "tls": settings.tls_enabled,
             }
         )
 

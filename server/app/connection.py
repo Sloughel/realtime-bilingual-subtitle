@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import uuid
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -24,6 +25,27 @@ from .telemetry import LatencyStats, get_logger, now_ms
 from .translate import TranslationService
 
 log = get_logger("connection")
+
+
+def extract_token(query_token: str | None, authorization: str | None) -> str:
+    """从 ``?token=`` 或 ``Authorization: Bearer …`` 取出令牌（E1）。"""
+    if query_token:
+        return query_token.strip()
+    header = (authorization or "").strip()
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return ""
+
+
+def token_ok(settings: Settings, provided: str) -> bool:
+    """校验令牌。未配置 AUTH_TOKEN 时一律通过（仅限可信局域网）。
+
+    使用 ``hmac.compare_digest`` 做定长比较，避免时序侧信道。
+    """
+    expected = (settings.auth_token or "").strip()
+    if not expected:
+        return True
+    return hmac.compare_digest(provided.strip(), expected)
 
 
 class WsSender:
@@ -133,6 +155,21 @@ async def handle_websocket(websocket: WebSocket) -> None:
     raw_pv = params.get("protocol_version")
     session_id = params.get("session_id") or str(uuid.uuid4())
     await websocket.accept()
+
+    # 鉴权（E1）：必须在任何业务消息之前，不做任何会话分配
+    if not token_ok(
+        settings,
+        extract_token(params.get("token"), websocket.headers.get("authorization")),
+    ):
+        log.warning(
+            "拒绝未授权连接：client=%s（未携带或令牌不匹配）",
+            getattr(websocket.client, "host", "?"),
+        )
+        await websocket.send_text(
+            dumps(protocol.error(protocol.ERR_UNAUTHORIZED, "令牌无效或缺失"))
+        )
+        await websocket.close(code=protocol.WS_CLOSE_UNAUTHORIZED)
+        return
 
     # 协议版本校验（03 §2）
     if raw_pv is not None and raw_pv != str(PROTOCOL_VERSION):

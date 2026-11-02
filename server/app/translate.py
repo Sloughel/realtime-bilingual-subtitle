@@ -142,7 +142,13 @@ class NullTranslator:
 
 
 class DeepSeekTranslator:
-    """OpenAI 兼容 Chat Completions 客户端（默认 DeepSeek）。"""
+    """OpenAI 兼容 Chat Completions 客户端（默认 DeepSeek）。
+
+    子类通过覆写 :meth:`_headers` / :meth:`_chat_url` / :meth:`_warm_url`
+    即可接入其他 OpenAI 兼容端点（见 :class:`OllamaTranslator`）。
+    """
+
+    backend_name = "deepseek"
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -152,6 +158,20 @@ class DeepSeekTranslator:
         self.max_retry = settings.translate_max_retry
         self._client: httpx.AsyncClient | None = None
 
+    # ---- 端点与请求头（子类覆写点）------------------------------------
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.settings.translate_api_key.strip()}",
+            "Content-Type": "application/json",
+        }
+
+    def _chat_url(self) -> str:
+        return f"{self.base_url}/chat/completions"
+
+    def _warm_url(self) -> str:
+        return self.base_url
+
+    # ------------------------------------------------------------------
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             # 句子间隔通常 8~15s，httpx 默认 keepalive_expiry 只有 5s，
@@ -178,14 +198,15 @@ class DeepSeekTranslator:
         client = self._get_client()
         t0 = time.perf_counter()
         try:
-            await client.get(
-                self.base_url,
-                headers={"Authorization": f"Bearer {self.settings.translate_api_key.strip()}"},
-            )
+            await client.get(self._warm_url(), headers=self._headers())
         except Exception as exc:  # noqa: BLE001 - 预热失败不影响功能
             log.debug("翻译端点预热未完成（可忽略）：%s", exc)
         else:
-            log.info("翻译端点连接预热完成：%.0f ms", (time.perf_counter() - t0) * 1000)
+            log.info(
+                "翻译端点连接预热完成（%s）：%.0f ms",
+                self.backend_name,
+                (time.perf_counter() - t0) * 1000,
+            )
 
     async def translate(self, text: str, src_lang: str, tgt_lang: str) -> TranslateOutcome:
         if not text:
@@ -200,11 +221,8 @@ class DeepSeekTranslator:
                 {"role": "user", "content": text},
             ],
         }
-        headers = {
-            "Authorization": f"Bearer {self.settings.translate_api_key.strip()}",
-            "Content-Type": "application/json",
-        }
-        url = f"{self.base_url}/chat/completions"
+        headers = self._headers()
+        url = self._chat_url()
 
         client = self._get_client()
         last_error_code = ERR_TRANSLATE_FAILED
@@ -261,6 +279,81 @@ class DeepSeekTranslator:
 
 
 # ---------------------------------------------------------------------------
+# 本地模型实现（E2：音频与文本全链路不出内网）
+# ---------------------------------------------------------------------------
+
+
+class OllamaTranslator(DeepSeekTranslator):
+    """Ollama 本地模型翻译（OpenAI 兼容端点 ``/v1/chat/completions``）。
+
+    与云端实现的差异：
+
+    * 无需 API Key，请求不带 ``Authorization``（本地端点通常不校验）；
+    * 健康检查走 Ollama 原生 ``/api/tags``，可据此提示"模型未 pull"；
+    * 首次调用要加载权重，超时预算更宽（``OLLAMA_TIMEOUT_S``，默认 30s）；
+    * 不产生 API 费用，:class:`TranslationService` 侧单价置零但 token 仍计数。
+    """
+
+    backend_name = "ollama"
+
+    def __init__(self, settings: Settings) -> None:
+        super().__init__(settings)
+        self.base_url = settings.ollama_base_url.rstrip("/")
+        self.model = settings.ollama_model
+        self.timeout = settings.ollama_timeout_s
+        self.max_retry = settings.translate_max_retry
+
+    def _headers(self) -> dict[str, str]:
+        return {"Content-Type": "application/json"}
+
+    def _chat_url(self) -> str:
+        # Ollama 自 0.1.24 起提供 OpenAI 兼容路径
+        return f"{self.base_url}/v1/chat/completions"
+
+    def _warm_url(self) -> str:
+        return f"{self.base_url}/api/tags"
+
+    async def warm_up(self) -> None:
+        """确认本地服务可达，并检查模型是否已 pull（不做推理，不占 GPU）。"""
+        client = self._get_client()
+        t0 = time.perf_counter()
+        try:
+            resp = await client.get(self._warm_url(), headers=self._headers())
+        except Exception as exc:  # noqa: BLE001 - 预热失败不影响启动
+            log.warning(
+                "本地翻译端点不可达（%s）：%s；翻译将降级回传原文。请确认 ollama 已启动。",
+                self.base_url,
+                exc,
+            )
+            return
+
+        if resp.status_code != 200:
+            log.warning("本地翻译端点返回 HTTP %s：%s", resp.status_code, resp.text[:160])
+            return
+
+        log.info(
+            "本地翻译端点预热完成：%.0f ms（%s / %s）",
+            (time.perf_counter() - t0) * 1000,
+            self.base_url,
+            self.model,
+        )
+        try:
+            names = [m.get("name", "") for m in (resp.json().get("models") or [])]
+        except Exception:  # noqa: BLE001 - 老版本/异常响应不阻塞启动
+            return
+        # Ollama 的 name 形如 qwen2.5:7b-instruct，允许配置里省略 tag
+        if names and not any(
+            n == self.model or n.split(":")[0] == self.model.split(":")[0] for n in names
+        ):
+            log.warning(
+                "本地未找到模型 %s；已安装：%s。请先执行 `ollama pull %s`。",
+                self.model,
+                ", ".join(names[:8]) or "（无）",
+                self.model,
+            )
+
+
+# ---------------------------------------------------------------------------
 # 服务层：并发控制 + 成本监控 + 降级
 # ---------------------------------------------------------------------------
 
@@ -271,11 +364,14 @@ class TranslationService:
     def __init__(self, translator: Translator, settings: Settings) -> None:
         self.translator = translator
         self.settings = settings
+        self.backend_name = getattr(translator, "backend_name", "custom")
+        # 本地模型（E2）不计费：单价置零，但 token 仍计入用量统计
+        local = getattr(settings, "translate_is_local", False)
         self.cost = CostMonitor(
             notify_yuan=settings.cost_notify_yuan,
             notify_tokens=settings.cost_notify_tokens,
-            price_in_per_m=settings.price_in_per_m,
-            price_out_per_m=settings.price_out_per_m,
+            price_in_per_m=0.0 if local else settings.price_in_per_m,
+            price_out_per_m=0.0 if local else settings.price_out_per_m,
         )
         self._sem = asyncio.Semaphore(max(1, settings.translate_concurrency))
         self.notifications: list[str] = []
@@ -305,8 +401,18 @@ class TranslationService:
 
 
 def build_translation_service(settings: Settings) -> TranslationService:
-    if settings.translate_configured:
-        translator: Translator = DeepSeekTranslator(settings)
+    translator: Translator
+    if settings.translate_is_local:
+        # E2：本地 Ollama，无需密钥；数据不出内网
+        translator = OllamaTranslator(settings)
+        log.info(
+            "翻译后端：本地 Ollama（%s @ %s）",
+            settings.ollama_model,
+            settings.ollama_base_url,
+        )
+    elif settings.translate_configured:
+        translator = DeepSeekTranslator(settings)
+        log.info("翻译后端：%s（%s）", settings.translate_base_url, settings.translate_model)
     else:
         log.warning("未配置 TRANSLATE_API_KEY，翻译将一律降级回传原文（FM-02）")
         translator = NullTranslator()

@@ -42,15 +42,21 @@ MODES: tuple[str, ...] = ("mic", "media")
 # 错误码（03 文档 §6）
 ERR_BAD_PARAM = 1001
 ERR_BAD_PROTOCOL = 1002
+# E1：服务端开启 AUTH_TOKEN 后，未携带或携带错误令牌
+ERR_UNAUTHORIZED = 1003
 ERR_BAD_FRAME = 2001
 ERR_ASR_FAILED = 3001
 ERR_TRANSLATE_FAILED = 4001
 ERR_TRANSLATE_TIMEOUT = 4002
 ERR_SERVER_BUSY = 5001
 
+# 鉴权失败的关闭码（RFC 6455 私有区间；客户端据此提示"令牌错误"而非无限重连）
+WS_CLOSE_UNAUTHORIZED = 4401
+
 ERROR_MESSAGES: dict[int, str] = {
     ERR_BAD_PARAM: "参数非法",
     ERR_BAD_PROTOCOL: "协议版本不支持",
+    ERR_UNAUTHORIZED: "鉴权失败",
     ERR_BAD_FRAME: "音频帧格式错误",
     ERR_ASR_FAILED: "语音识别失败",
     ERR_TRANSLATE_FAILED: "翻译失败",
@@ -62,6 +68,7 @@ ERROR_MESSAGES: dict[int, str] = {
 RECOVERABLE: dict[int, bool] = {
     ERR_BAD_PARAM: True,
     ERR_BAD_PROTOCOL: False,
+    ERR_UNAUTHORIZED: False,
     ERR_BAD_FRAME: True,
     ERR_ASR_FAILED: True,
     ERR_TRANSLATE_FAILED: True,

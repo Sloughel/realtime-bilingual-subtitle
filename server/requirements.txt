@@ -18,6 +18,11 @@ numpy>=1.26
 # faster-whisper 自带基于 onnxruntime 的 Silero VAD，无需额外安装 torch
 faster-whisper>=1.1.0
 onnxruntime>=1.20
+# 【坑】faster-whisper 1.2.1 的 decode_audio() 使用 av.open(..., metadata_errors="ignore")，
+# 而 PyAV >= 14 已移除该参数，装了新版 PyAV 会在断句/端到端测试里报 TypeError。
+# 2026-11-02 在 Ubuntu + Python 3.13 实测：av 13.1.0 通过，av 19.0.2 失败。
+# 若 pip 解析到更高版本，请显式安装： pip install "av==13.1.0"
+av>=12,<14
 
 # --- CUDA 运行时（faster-whisper / CTranslate2 依赖，CUDA 12 + cuDNN 9）---
 nvidia-cublas-cu12>=12.4

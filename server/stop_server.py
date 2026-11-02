@@ -38,7 +38,7 @@ def main() -> int:
 
     pid, name, exe = owner
     print(f"端口 {port} 被 PID {pid}（{name}）占用：{exe}")
-    if name.lower() not in ("python.exe", "pythonw.exe", "python"):
+    if not name.lower().startswith(("python", "uvicorn")):
         print("该进程不是 Python，已拒绝终止，请手动确认。")
         return 1
 
